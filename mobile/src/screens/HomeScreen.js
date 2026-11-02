@@ -39,6 +39,9 @@ export default function HomeScreen({ navigation, onLogout }) {
       <TouchableOpacity style={[styles.bouton, { marginTop: 12 }]} onPress={() => navigation.navigate('Vehicle')}>
         <Text style={styles.boutonTexte}>Mon véhicule</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={[styles.bouton, { marginTop: 12 }]} onPress={() => navigation.navigate('Schedule')}>
+  <Text style={styles.boutonTexte}>Mon emploi du temps</Text>
+</TouchableOpacity>
       <TouchableOpacity style={[styles.bouton, { marginTop: 12, backgroundColor: '#6b7280' }]} onPress={onLogout}>
         <Text style={styles.boutonTexte}>Se déconnecter</Text>
       </TouchableOpacity>

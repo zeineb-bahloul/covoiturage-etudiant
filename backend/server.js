@@ -11,6 +11,8 @@ const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 const userRoutes = require('./routes/users');
 app.use('/api/users', userRoutes);
+const scheduleRoutes = require('./routes/schedule');
+app.use('/api/schedule', scheduleRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'API OK' });

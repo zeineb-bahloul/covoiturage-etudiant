@@ -9,7 +9,7 @@ import RegisterScreen from './src/screens/RegisterScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import VehicleScreen from './src/screens/VehicleScreen';
-
+import ScheduleScreen from './src/screens/ScheduleScreen';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -53,6 +53,7 @@ export default function App() {
             <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Mon profil' }} />
 
             <Stack.Screen name="Vehicle" component={VehicleScreen} options={{ title: 'Mon véhicule' }} />
+            <Stack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Mon emploi du temps' }} />
           </>
         ) : (
           <>
