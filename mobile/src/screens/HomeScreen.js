@@ -3,16 +3,21 @@ import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import api from '../api';
 import styles from '../styles';
 
-export default function HomeScreen({ token, onLogout }) {
+export default function HomeScreen({ navigation, onLogout }) {
   const [user, setUser] = useState(null);
   const [erreur, setErreur] = useState('');
 
   useEffect(() => {
-    api
-      .get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => setUser(res.data))
-      .catch(() => setErreur('Session expirée, reconnectez-vous'));
-  }, [token]);
+    const charger = () => {
+      api
+        .get('/auth/me')
+        .then((res) => setUser(res.data))
+        .catch(() => setErreur('Session expirée, reconnectez-vous'));
+    };
+    charger();
+    const abonnement = navigation.addListener('focus', charger);
+    return abonnement;
+  }, [navigation]);
 
   return (
     <View style={styles.container}>
@@ -22,11 +27,19 @@ export default function HomeScreen({ token, onLogout }) {
       {user ? (
         <>
           <Text style={styles.titre}>Bonjour {user.nom} !</Text>
-          <Text style={{ textAlign: 'center', marginBottom: 24 }}>{user.email}</Text>
+          <Text style={{ textAlign: 'center', marginBottom: 24 }}>
+            {user.vehicule ? `Conducteur : ${user.vehicule.marque}` : 'Passager (aucun véhicule)'}
+          </Text>
         </>
       ) : null}
 
-      <TouchableOpacity style={styles.bouton} onPress={onLogout}>
+      <TouchableOpacity style={styles.bouton} onPress={() => navigation.navigate('Profile')}>
+        <Text style={styles.boutonTexte}>Mon profil</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.bouton, { marginTop: 12 }]} onPress={() => navigation.navigate('Vehicle')}>
+        <Text style={styles.boutonTexte}>Mon véhicule</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.bouton, { marginTop: 12, backgroundColor: '#6b7280' }]} onPress={onLogout}>
         <Text style={styles.boutonTexte}>Se déconnecter</Text>
       </TouchableOpacity>
     </View>

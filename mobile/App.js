@@ -7,6 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import VehicleScreen from './src/screens/VehicleScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,14 +45,21 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator>
         {token ? (
-          <Stack.Screen name="Home" options={{ title: 'Accueil' }}>
-            {(props) => <HomeScreen {...props} token={token} onLogout={deconnecter} />}
-          </Stack.Screen>
+          <>
+            <Stack.Screen name="Home" options={{ title: 'Accueil' }}>
+              {(props) => <HomeScreen {...props} onLogout={deconnecter} />}
+            </Stack.Screen>
+
+            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Mon profil' }} />
+
+            <Stack.Screen name="Vehicle" component={VehicleScreen} options={{ title: 'Mon véhicule' }} />
+          </>
         ) : (
           <>
             <Stack.Screen name="Login" options={{ title: 'Connexion' }}>
               {(props) => <LoginScreen {...props} onLogin={connecter} />}
             </Stack.Screen>
+
             <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Inscription' }} />
           </>
         )}
