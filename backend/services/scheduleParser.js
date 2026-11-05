@@ -150,3 +150,4 @@ function lireEmploiDuTemps(contenu) {
 }
 
 module.exports = { lireEmploiDuTemps };
+
