@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, View, Text, TextInput, Switch, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { ScrollView, View, Text, TextInput, Switch, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import api from '../api';
 import styles from '../styles';
 
@@ -17,6 +19,8 @@ export default function ProfileScreen() {
   const [mixte, setMixte] = useState(true);
   const [musique, setMusique] = useState('aucune');
   const [note, setNote] = useState(0);
+  const [photo, setPhoto] = useState('');
+  const [photoEnvoi, setPhotoEnvoi] = useState(false);
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
 
@@ -31,10 +35,46 @@ export default function ProfileScreen() {
         setMixte(data.preferences?.mixte ?? true);
         setMusique(data.preferences?.musique || 'aucune');
         setNote(data.noteMoyenne || 0);
+        setPhoto(data.photo || '');
       })
       .catch(() => Alert.alert('Erreur', 'Impossible de charger le profil'))
       .finally(() => setChargement(false));
   }, []);
+
+  const changerPhoto = async () => {
+    const choix = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (choix.canceled) return;
+
+    setPhotoEnvoi(true);
+    try {
+      const reduite = await ImageManipulator.manipulateAsync(
+        choix.assets[0].uri,
+        [{ resize: { width: 300 } }],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      const dataUri = `data:image/jpeg;base64,${reduite.base64}`;
+      await api.put('/users/me/photo', { photo: dataUri });
+      setPhoto(dataUri);
+    } catch (err) {
+      Alert.alert('Erreur', err.response?.data?.message || "Impossible d'enregistrer la photo");
+    } finally {
+      setPhotoEnvoi(false);
+    }
+  };
+
+  const supprimerPhoto = async () => {
+    try {
+      await api.delete('/users/me/photo');
+      setPhoto('');
+    } catch (err) {
+      Alert.alert('Erreur', 'Suppression impossible');
+    }
+  };
 
   const sauvegarder = async () => {
     if (!nom.trim()) {
@@ -67,6 +107,34 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
+      <View style={{ alignItems: 'center', marginBottom: 20 }}>
+        {photo ? (
+          <Image source={{ uri: photo }} style={{ width: 110, height: 110, borderRadius: 55 }} />
+        ) : (
+          <View
+            style={{
+              width: 110,
+              height: 110,
+              borderRadius: 55,
+              backgroundColor: '#e5e7eb',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 40 }}>{nom ? nom[0].toUpperCase() : '?'}</Text>
+          </View>
+        )}
+
+        <Text style={{ color: '#2563eb', marginTop: 10 }} onPress={photoEnvoi ? undefined : changerPhoto}>
+          {photoEnvoi ? 'Envoi en cours…' : photo ? 'Changer la photo' : 'Ajouter une photo'}
+        </Text>
+        {photo ? (
+          <Text style={{ color: '#dc2626', marginTop: 6 }} onPress={supprimerPhoto}>
+            Supprimer la photo
+          </Text>
+        ) : null}
+      </View>
+
       <Text style={{ textAlign: 'center', marginBottom: 20 }}>Note moyenne : {note.toFixed(1)} / 5</Text>
 
       <Text style={{ fontWeight: 'bold', marginBottom: 6 }}>Nom</Text>

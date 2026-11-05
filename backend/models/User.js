@@ -1,8 +1,11 @@
 const mongoose = require('mongoose');
 
+const COULEURS = ['blanc', 'noir', 'gris', 'argent', 'rouge', 'bleu', 'vert', 'jaune', 'orange', 'marron', 'autre'];
+
 const vehiculeSchema = new mongoose.Schema(
   {
     marque: { type: String, required: true, trim: true },
+    couleur: { type: String, enum: COULEURS, required: true },
     places: { type: Number, required: true, min: 1, max: 8 },
     matricule: { type: String, required: true, trim: true },
   },
@@ -16,6 +19,7 @@ const userSchema = new mongoose.Schema(
     motDePasse: { type: String, required: true },
     filiere: { type: String, default: '' },
     adresse: { type: String, default: '' },
+    photo: { type: String, default: '' },
     role: { type: String, enum: ['utilisateur', 'admin'], default: 'utilisateur' },
     noteMoyenne: { type: Number, default: 0 },
     preferences: {

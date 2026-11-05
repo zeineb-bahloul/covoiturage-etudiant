@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, TextInput, Switch, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import api from '../api';
 import styles from '../styles';
 
@@ -21,6 +22,7 @@ export default function ScheduleScreen({ navigation }) {
   const [lignes, setLignes] = useState(etatVide());
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
+  const [importEnCours, setImportEnCours] = useState(false);
 
   useEffect(() => {
     api
@@ -38,6 +40,45 @@ export default function ScheduleScreen({ navigation }) {
 
   const modifier = (cle, champ, valeur) => {
     setLignes((avant) => ({ ...avant, [cle]: { ...avant[cle], [champ]: valeur } }));
+  };
+
+  const importerFichier = async () => {
+    try {
+      const choix = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+      if (choix.canceled) return;
+
+      const fichier = choix.assets[0];
+      if (!/\.(ics|csv|txt)$/i.test(fichier.name)) {
+        Alert.alert('Format non reconnu', 'Choisissez un fichier .ics ou .csv');
+        return;
+      }
+
+      setImportEnCours(true);
+      const reponse = await fetch(fichier.uri);
+      const contenu = await reponse.text();
+
+      const { data } = await api.post('/schedule/import', { contenu });
+
+      const etat = etatVide();
+      data.jours.forEach((j) => {
+        etat[j.jour] = { actif: true, debut: j.debut, fin: j.fin };
+      });
+      setLignes(etat);
+
+      Alert.alert(
+        'Import réussi',
+        `${data.jours.length} jour(s) détecté(s)` +
+          (data.ignorees ? `, ${data.ignorees} ligne(s) ignorée(s)` : '') +
+          '. Vérifiez les heures puis touchez Enregistrer.'
+      );
+    } catch (err) {
+      Alert.alert('Erreur', err.response?.data?.message || 'Lecture du fichier impossible');
+    } finally {
+      setImportEnCours(false);
+    }
   };
 
   const enregistrer = async () => {
@@ -82,6 +123,21 @@ export default function ScheduleScreen({ navigation }) {
       <Text style={{ textAlign: 'center', marginBottom: 20 }}>
         Pour chaque jour de cours, indiquez l'heure de votre premier cours (arrivée) et la fin de votre dernier
         cours (départ).
+      </Text>
+
+      <TouchableOpacity
+        style={[styles.bouton, { backgroundColor: '#0f766e', marginBottom: 6 }]}
+        onPress={importerFichier}
+        disabled={importEnCours}
+      >
+        {importEnCours ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.boutonTexte}>Importer un fichier (.ics ou .csv)</Text>
+        )}
+      </TouchableOpacity>
+      <Text style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginBottom: 20 }}>
+        CSV : une ligne par cours, au format jour;debut;fin (ex : lundi;08:30;10:00). ICS : export de votre calendrier.
       </Text>
 
       {JOURS.map((j) => {

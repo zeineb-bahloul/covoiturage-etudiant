@@ -1,6 +1,7 @@
 const express = require('express');
 const Schedule = require('../models/Schedule');
 const auth = require('../middleware/auth');
+const { lireEmploiDuTemps } = require('../services/scheduleParser');
 
 const router = express.Router();
 
@@ -53,6 +54,20 @@ router.put('/me', auth, async (req, res) => {
     res.json(schedule);
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+router.post('/import', auth, (req, res) => {
+  const { contenu } = req.body;
+
+  if (typeof contenu !== 'string' || contenu.trim() === '') {
+    return res.status(400).json({ message: 'Fichier vide ou illisible' });
+  }
+
+  try {
+    res.json(lireEmploiDuTemps(contenu));
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 });
 
