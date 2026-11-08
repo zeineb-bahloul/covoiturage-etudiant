@@ -12,6 +12,9 @@ import VehicleScreen from './src/screens/VehicleScreen';
 import ScheduleScreen from './src/screens/ScheduleScreen';
 import MyRidesScreen from './src/screens/MyRidesScreen';
 import PublishRideScreen from './src/screens/PublishRideScreen';
+import SearchRideScreen from './src/screens/SearchRideScreen';
+import RideResultsScreen from './src/screens/RideResultsScreen';
+import RideDetailScreen from './src/screens/RideDetailScreen';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -58,6 +61,9 @@ export default function App() {
             <Stack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Mon emploi du temps' }} />
             <Stack.Screen name="MyRides" component={MyRidesScreen} options={{ title: 'Mes trajets' }} />
             <Stack.Screen name="PublishRide" component={PublishRideScreen} options={{ title: 'Publier un trajet' }} />
+            <Stack.Screen name="SearchRide" component={SearchRideScreen} options={{ title: 'Chercher un trajet' }} />
+            <Stack.Screen name="RideResults" component={RideResultsScreen} options={{ title: 'Résultats' }} />
+            <Stack.Screen name="RideDetail" component={RideDetailScreen} options={{ title: 'Détail du trajet' }} />
           </>
         ) : (
           <>

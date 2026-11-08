@@ -17,6 +17,10 @@ app.use('/api/schedule', scheduleRoutes);
 app.get('/', (req, res) => {
   res.json({ message: 'API OK' });
 });
+const mapRoutes = require('./routes/map');
+const rideRoutes = require('./routes/rides');
+app.use('/api/map', mapRoutes);
+app.use('/api/rides', rideRoutes);
 
 mongoose
   .connect(process.env.MONGO_URI)

@@ -36,6 +36,9 @@ export default function HomeScreen({ navigation, onLogout }) {
       <TouchableOpacity style={styles.bouton} onPress={() => navigation.navigate('Profile')}>
         <Text style={styles.boutonTexte}>Mon profil</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.bouton} onPress={() => navigation.navigate('SearchRide')}>
+  <Text style={styles.boutonTexte}>Chercher un trajet</Text>
+</TouchableOpacity>
       <TouchableOpacity style={[styles.bouton, { marginTop: 12 }]} onPress={() => navigation.navigate('Vehicle')}>
         <Text style={styles.boutonTexte}>Mon véhicule</Text>
       </TouchableOpacity>
