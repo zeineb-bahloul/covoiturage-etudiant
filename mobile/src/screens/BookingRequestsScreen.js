@@ -242,10 +242,29 @@ export default function BookingRequestsScreen({ route, navigation }) {
               )}
 
               {item.statut === 'acceptee' && (
-                <View style={styles.statusConfirmRow}>
-                  <Text style={styles.statusConfirmTexte}>✓ Demande acceptée (Place réservée)</Text>
-                  <TouchableOpacity onPress={() => refuser(item._id)}>
-                    <Text style={styles.annulerLien}>Annuler</Text>
+                <View style={{ marginTop: 8 }}>
+                  <View style={styles.statusConfirmRow}>
+                    <Text style={styles.statusConfirmTexte}>✓ Demande acceptée (Place réservée)</Text>
+                    <TouchableOpacity onPress={() => refuser(item._id)}>
+                      <Text style={styles.annulerLien}>Annuler</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.boutonContacterPassager}
+                    onPress={() =>
+                      navigation.navigate('Chat', {
+                        destinataireId: passager?._id,
+                        contactNom: passager?.nom,
+                        contactPhoto: passager?.photo,
+                        contactFiliere: passager?.filiere,
+                        trajetTitre: trajet ? `${trajet.depart?.label?.split(',')[0]} → ${trajet.destination?.label?.split(',')[0]}` : '',
+                      })
+                    }
+                  >
+                    <Text style={styles.boutonContacterPassagerTexte}>
+                      💬 Discuter pour fixer le point de rendez-vous
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -495,6 +514,21 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontWeight: '700',
     fontSize: 13,
+  },
+  boutonContacterPassager: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  boutonContacterPassagerTexte: {
+    color: colors.primaryDark,
+    fontWeight: '700',
+    fontSize: 12,
   },
   emptyContainer: {
     alignItems: 'center',

@@ -77,12 +77,25 @@ export default function ActiveRideScreen({ route, navigation }) {
   };
 
   const signalerSouci = () => {
+    const cible = estConducteur && passagers.length > 0 ? passagers[0] : data?.ride?.conducteur;
     Alert.alert(
       'Signaler un souci',
-      'Un imprévu sur la route ? Vos passagers peuvent être prévenus par message.',
+      'Quel imprévu rencontrez-vous ?',
       [
-        { text: 'Trafic / Ralentissement', onPress: () => Alert.alert('Information', 'Notification envoyée aux passagers.') },
-        { text: 'Arrêt imprévu', onPress: () => Alert.alert('Information', 'Notification envoyée aux passagers.') },
+        {
+          text: 'Signaler un comportement 🛡️',
+          onPress: () => {
+            navigation.navigate('Report', {
+              utilisateurSignaleId: cible?._id,
+              utilisateurNom: cible?.nom,
+              trajetId: data?.ride?._id,
+            });
+          },
+        },
+        {
+          text: 'Trafic / Ralentissement 🚦',
+          onPress: () => Alert.alert('Information', 'Notification de retard transmise aux passagers.'),
+        },
         { text: 'Annuler', style: 'cancel' },
       ]
     );
@@ -288,6 +301,24 @@ export default function ActiveRideScreen({ route, navigation }) {
               <Text style={styles.recapValue}>{recap?.distanceKm || ride.distanceKm} km</Text>
             </View>
           </View>
+
+          <TouchableOpacity
+            style={styles.boutonNoterAction}
+            onPress={() => {
+              setModalTermine(false);
+              const cible = estConducteur && passagers.length > 0 ? passagers[0] : ride.conducteur;
+              navigation.navigate('RateRide', {
+                trajetId: ride._id,
+                cibleId: cible?._id,
+                cibleNom: cible?.nom,
+                ciblePhoto: cible?.photo,
+                roleCible: estConducteur ? 'passager' : 'conducteur',
+              });
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.boutonNoterActionTexte}>⭐ Noter l'expérience & Badges</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.boutonRetourAccueil}
@@ -623,18 +654,33 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.text,
   },
-  boutonRetourAccueil: {
+  boutonNoterAction: {
     width: '100%',
-    backgroundColor: colors.primary,
+    backgroundColor: '#F59E0B',
     paddingVertical: 16,
     borderRadius: 25,
     alignItems: 'center',
-    ...shadows.card,
+    marginBottom: 12,
+    ...shadows.elevated,
   },
-  boutonRetourAccueilTexte: {
+  boutonNoterActionTexte: {
     color: colors.white,
     fontSize: 16,
     fontWeight: '800',
+  },
+  boutonRetourAccueil: {
+    width: '100%',
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingVertical: 14,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  boutonRetourAccueilTexte: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
 

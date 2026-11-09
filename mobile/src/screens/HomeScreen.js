@@ -304,6 +304,20 @@ export default function HomeScreen({ navigation, onLogout }) {
             </View>
             <Text style={styles.arrowIcon}>→</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.bannerPlanning, { marginTop: 10, borderColor: '#A7F3D0', backgroundColor: '#F0FDF4' }]}
+            onPress={() => navigation.navigate('Stats')}
+          >
+            <Text style={styles.bannerPlanningIcon}>🏆</Text>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.bannerPlanningTitre, { color: colors.primaryDark }]}>Mes Statistiques & Badges (US16-17)</Text>
+              <Text style={styles.bannerPlanningDesc}>
+                Consultez vos économies en dinars, votre CO₂ évité et vos badges de valorisation.
+              </Text>
+            </View>
+            <Text style={styles.arrowIcon}>→</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -331,10 +345,10 @@ export default function HomeScreen({ navigation, onLogout }) {
 
         <TouchableOpacity
           style={styles.tabBarItem}
-          onPress={() => navigation.navigate('MyBookings')}
+          onPress={() => navigation.navigate('Discussions')}
         >
-          <Text style={styles.tabBarIcon}>🎫</Text>
-          <Text style={styles.tabBarLabel}>RÉSERVATIONS</Text>
+          <Text style={styles.tabBarIcon}>💬</Text>
+          <Text style={styles.tabBarLabel}>CHAT</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

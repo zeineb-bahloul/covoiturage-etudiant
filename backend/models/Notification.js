@@ -15,6 +15,9 @@ const notificationSchema = new mongoose.Schema(
         'trajet_termine',
         'trajet_annule',
         'suggestion',
+        'nouveau_message',
+        'nouvel_avis',
+        'badge_obtenu',
       ],
       required: true,
     },
@@ -23,6 +26,8 @@ const notificationSchema = new mongoose.Schema(
     donnees: {
       trajetId: { type: mongoose.Schema.Types.ObjectId, ref: 'Ride' },
       bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
+      conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation' },
+      reviewId: { type: mongoose.Schema.Types.ObjectId, ref: 'Review' },
     },
     lu: { type: Boolean, default: false, index: true },
   },
@@ -30,4 +35,3 @@ const notificationSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Notification', notificationSchema);
-

@@ -20,6 +20,11 @@ import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import MatchingDetailScreen from './src/screens/MatchingDetailScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import ActiveRideScreen from './src/screens/ActiveRideScreen';
+import DiscussionsScreen from './src/screens/DiscussionsScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import RateRideScreen from './src/screens/RateRideScreen';
+import ReportScreen from './src/screens/ReportScreen';
+import StatsScreen from './src/screens/StatsScreen';
 import { colors } from './src/theme';
 import { AuthContext } from './src/context/AuthContext';
 
@@ -81,6 +86,11 @@ export default function App() {
               <Stack.Screen name="MatchingDetail" component={MatchingDetailScreen} />
               <Stack.Screen name="Notifications" component={NotificationsScreen} />
               <Stack.Screen name="ActiveRide" component={ActiveRideScreen} />
+              <Stack.Screen name="Discussions" component={DiscussionsScreen} />
+              <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="RateRide" component={RateRideScreen} />
+              <Stack.Screen name="Report" component={ReportScreen} />
+              <Stack.Screen name="Stats" component={StatsScreen} />
             </>
           ) : (
             <>

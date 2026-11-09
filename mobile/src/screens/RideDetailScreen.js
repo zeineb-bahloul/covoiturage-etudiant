@@ -317,6 +317,42 @@ export default function RideDetailScreen({ route, navigation }) {
               </Text>
             </View>
           </View>
+
+          {/* Boutons d'interaction avec le conducteur (US12 & US15) */}
+          {!ride.estConducteur && conducteur && (
+            <View style={styles.conducteurActionsRow}>
+              <TouchableOpacity
+                style={styles.boutonDiscuterConducteur}
+                onPress={() =>
+                  navigation.navigate('Chat', {
+                    destinataireId: conducteur._id,
+                    contactNom: conducteur.nom,
+                    contactPhoto: conducteur.photo,
+                    contactFiliere: conducteur.filiere,
+                    trajetTitre: `${ride.depart.label?.split(',')[0]} → ${ride.destination.label?.split(',')[0]}`,
+                  })
+                }
+                activeOpacity={0.8}
+              >
+                <Text style={styles.boutonDiscuterIcone}>💬</Text>
+                <Text style={styles.boutonDiscuterTexte}>Envoyer un message</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.boutonSignalerConducteur}
+                onPress={() =>
+                  navigation.navigate('Report', {
+                    utilisateurSignaleId: conducteur._id,
+                    utilisateurNom: conducteur.nom,
+                    trajetId: ride._id,
+                  })
+                }
+                activeOpacity={0.8}
+              >
+                <Text style={styles.boutonSignalerIcone}>🛡️</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Section Réservation (US9, US21) */}
@@ -944,5 +980,47 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '800',
     fontSize: 15,
+  },
+  conducteurActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  boutonDiscuterConducteur: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    paddingVertical: 11,
+    borderRadius: 16,
+    gap: 6,
+  },
+  boutonDiscuterIcone: {
+    fontSize: 16,
+  },
+  boutonDiscuterTexte: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primaryDark,
+  },
+  boutonSignalerConducteur: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1.5,
+    borderColor: '#FECDD3',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  boutonSignalerIcone: {
+    fontSize: 18,
   },
 });

@@ -20,8 +20,19 @@ const userSchema = new mongoose.Schema(
     filiere: { type: String, default: '' },
     adresse: { type: String, default: '' },
     photo: { type: String, default: '' },
+    telephone: { type: String, default: '' },
     role: { type: String, enum: ['utilisateur', 'admin'], default: 'utilisateur' },
     noteMoyenne: { type: Number, default: 0 },
+    nombreAvis: { type: Number, default: 0 },
+    badges: {
+      type: [String],
+      default: ['Pionnier ISET 🎓'],
+    },
+    statistiques: {
+      co2Economise: { type: Number, default: 0 },
+      argentEconomise: { type: Number, default: 0 },
+      trajetsEffectues: { type: Number, default: 0 },
+    },
     preferences: {
       nonFumeur: { type: Boolean, default: true },
       mixte: { type: Boolean, default: true },

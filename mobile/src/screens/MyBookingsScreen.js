@@ -205,14 +205,49 @@ export default function MyBookingsScreen({ navigation }) {
                 </TouchableOpacity>
               )}
 
+              {/* Trajet terminé - Possibilité de noter le conducteur (US14 & US17) */}
+              {trajet?.statut === 'termine' && (
+                <TouchableOpacity
+                  style={styles.boutonNoterConducteur}
+                  onPress={() =>
+                    navigation.navigate('RateRide', {
+                      trajetId: trajet._id,
+                      cibleId: conducteur?._id,
+                      cibleNom: conducteur?.nom,
+                      ciblePhoto: conducteur?.photo,
+                      roleCible: 'conducteur',
+                    })
+                  }
+                >
+                  <Text style={styles.boutonNoterConducteurTexte}>⭐ Noter ce conducteur & Badges</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Actions */}
               <View style={styles.actionsRow}>
+                {conducteur && (
+                  <TouchableOpacity
+                    style={styles.boutonChatAction}
+                    onPress={() =>
+                      navigation.navigate('Chat', {
+                        destinataireId: conducteur._id,
+                        contactNom: conducteur.nom,
+                        contactPhoto: conducteur.photo,
+                        contactFiliere: conducteur.filiere,
+                        trajetTitre: trajet ? `${trajet.depart?.label?.split(',')[0]} → ${trajet.destination?.label?.split(',')[0]}` : '',
+                      })
+                    }
+                  >
+                    <Text style={styles.boutonChatActionTexte}>💬 Message</Text>
+                  </TouchableOpacity>
+                )}
+
                 {trajet && (
                   <TouchableOpacity
                     style={styles.boutonVoir}
                     onPress={() => navigation.navigate('RideDetail', { id: trajet._id })}
                   >
-                    <Text style={styles.boutonVoirTexte}>Voir l'itinéraire</Text>
+                    <Text style={styles.boutonVoirTexte}>Itinéraire</Text>
                   </TouchableOpacity>
                 )}
 
@@ -377,6 +412,34 @@ const styles = StyleSheet.create({
   boutonSuiviDirectTexte: {
     color: colors.white,
     fontWeight: '800',
+    fontSize: 13,
+  },
+  boutonNoterConducteur: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    paddingVertical: 10,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  boutonNoterConducteurTexte: {
+    color: '#B45309',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  boutonChatAction: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginRight: 6,
+  },
+  boutonChatActionTexte: {
+    color: colors.primaryDark,
+    fontWeight: '700',
     fontSize: 13,
   },
   actionsRow: {

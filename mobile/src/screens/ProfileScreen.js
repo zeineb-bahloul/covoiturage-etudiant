@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ScrollView,
   View,
@@ -30,34 +30,54 @@ export default function ProfileScreen({ navigation, route, onLogout }) {
   const [email, setEmail] = useState('');
   const [filiere, setFiliere] = useState('');
   const [adresse, setAdresse] = useState('');
+  const [telephone, setTelephone] = useState('');
   const [nonFumeur, setNonFumeur] = useState(true);
   const [mixte, setMixte] = useState(true);
   const [musique, setMusique] = useState('aucune');
   const [note, setNote] = useState(0);
+  const [nombreAvis, setNombreAvis] = useState(0);
   const [photo, setPhoto] = useState('');
+  const [badges, setBadges] = useState([]);
+  const [stats, setStats] = useState(null);
   const [vehicule, setVehicule] = useState(null);
   const [photoEnvoi, setPhotoEnvoi] = useState(false);
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
 
-  useEffect(() => {
-    api
-      .get('/auth/me')
-      .then(({ data }) => {
-        setNom(data.nom);
-        setEmail(data.email || '');
-        setFiliere(data.filiere || '');
-        setAdresse(data.adresse || '');
-        setNonFumeur(data.preferences?.nonFumeur ?? true);
-        setMixte(data.preferences?.mixte ?? true);
-        setMusique(data.preferences?.musique || 'aucune');
-        setNote(data.noteMoyenne || 0);
-        setPhoto(data.photo || '');
-        setVehicule(data.vehicule || null);
-      })
-      .catch(() => Alert.alert('Erreur', 'Impossible de charger le profil'))
-      .finally(() => setChargement(false));
+  const chargerProfil = useCallback(async () => {
+    try {
+      const [resUser, resStats] = await Promise.all([
+        api.get('/auth/me'),
+        api.get('/stats/me').catch(() => ({ data: null })),
+      ]);
+
+      const data = resUser.data;
+      setNom(data.nom || '');
+      setEmail(data.email || '');
+      setFiliere(data.filiere || '');
+      setAdresse(data.adresse || '');
+      setTelephone(data.telephone || '');
+      setNonFumeur(data.preferences?.nonFumeur ?? true);
+      setMixte(data.preferences?.mixte ?? true);
+      setMusique(data.preferences?.musique || 'aucune');
+      setNote(data.noteMoyenne || 0);
+      setNombreAvis(data.nombreAvis || 0);
+      setPhoto(data.photo || '');
+      setBadges(data.badges || ['Pionnier ISET 🎓']);
+      setVehicule(data.vehicule || null);
+      setStats(resStats.data);
+    } catch (err) {
+      Alert.alert('Erreur', 'Impossible de charger le profil');
+    } finally {
+      setChargement(false);
+    }
   }, []);
+
+  useEffect(() => {
+    chargerProfil();
+    const unsubscribe = navigation.addListener('focus', chargerProfil);
+    return unsubscribe;
+  }, [navigation, chargerProfil]);
 
   const changerPhoto = async () => {
     const choix = await ImagePicker.launchImageLibraryAsync({
@@ -147,10 +167,9 @@ export default function ProfileScreen({ navigation, route, onLogout }) {
   return (
     <View style={styles.container}>
       <UniHeader
-        title="Mon Espace"
-        subtitle="Profil & Préférences"
-        navigation={navigation}
-        showBack={true}
+        titre="Mon Espace"
+        sousTitre="Profil & Impact Écologique"
+        onBack={() => navigation.navigate('Home')}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
@@ -169,7 +188,18 @@ export default function ProfileScreen({ navigation, route, onLogout }) {
           <Text style={styles.profileDepartment}>🎓 {filiere || 'Étudiant ISET Nabeul'}</Text>
 
           <View style={styles.ratingBadge}>
-            <Text style={styles.ratingBadgeText}>⭐ {note > 0 ? note.toFixed(1) : '4.8'} / 5 (Fiabilité)</Text>
+            <Text style={styles.ratingBadgeText}>
+              ⭐ {note > 0 ? note.toFixed(1) : '5.0'} / 5 ({nombreAvis} avis)
+            </Text>
+          </View>
+
+          {/* Badges de l'utilisateur (US17) */}
+          <View style={styles.badgesRow}>
+            {badges.map((b, i) => (
+              <View key={i} style={styles.badgePill}>
+                <Text style={styles.badgePillText}>{b}</Text>
+              </View>
+            ))}
           </View>
 
           <View style={styles.photoActionsRow}>
@@ -186,8 +216,54 @@ export default function ProfileScreen({ navigation, route, onLogout }) {
           </View>
         </View>
 
-        {/* Raccourcis Véhicule / Réservations / Trajets */}
+        {/* Aperçu Mes Statistiques (US16 & US17) */}
+        <TouchableOpacity
+          style={styles.statsCard}
+          onPress={() => navigation.navigate('Stats')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.statsCardHeader}>
+            <View>
+              <Text style={styles.statsCardTitle}>Mes Statistiques & Impact</Text>
+              <Text style={styles.statsCardSub}>Économies et écologie sur le campus</Text>
+            </View>
+            <Text style={styles.arrowIcon}>→</Text>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statMiniCol}>
+              <Text style={styles.statMiniValue}>{stats?.argentEconomise || 0} DT</Text>
+              <Text style={styles.statMiniLabel}>Économisés</Text>
+            </View>
+            <View style={styles.statMiniDivider} />
+            <View style={styles.statMiniCol}>
+              <Text style={styles.statMiniValue}>{stats?.co2Economise || 0} kg</Text>
+              <Text style={styles.statMiniLabel}>CO₂ évité</Text>
+            </View>
+            <View style={styles.statMiniDivider} />
+            <View style={styles.statMiniCol}>
+              <Text style={styles.statMiniValue}>{stats?.trajetsEffectues || 0}</Text>
+              <Text style={styles.statMiniLabel}>Trajets</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {/* Raccourcis Véhicule / Réservations / Trajets / Discussions */}
         <View style={styles.linksCard}>
+          <TouchableOpacity
+            style={styles.linkItem}
+            onPress={() => navigation.navigate('Discussions')}
+          >
+            <Text style={styles.linkIcon}>💬</Text>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.linkTitle}>Mes Discussions</Text>
+              <Text style={styles.linkSub}>Échanger avec les conducteurs et passagers</Text>
+            </View>
+            <Text style={styles.arrowIcon}>→</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
           <TouchableOpacity
             style={styles.linkItem}
             onPress={() => navigation.navigate('Vehicle')}
@@ -307,6 +383,20 @@ export default function ProfileScreen({ navigation, route, onLogout }) {
           </TouchableOpacity>
         </View>
 
+        {/* Sécurité et Signalement */}
+        <TouchableOpacity
+          style={styles.boutonSignalerProbleme}
+          onPress={() => navigation.navigate('Report', {})}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.iconeBouclier}>🛡️</Text>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.titreSignaler}>Signaler un incident ou un utilisateur</Text>
+            <Text style={styles.descSignaler}>Garantir la sécurité et le respect de la communauté</Text>
+          </View>
+          <Text style={styles.arrowIcon}>→</Text>
+        </TouchableOpacity>
+
         {/* Bouton Se déconnecter (Fidèle à l'image 1 de la maquette "Mon Espace") */}
         <TouchableOpacity
           style={styles.boutonDeconnexion}
@@ -338,111 +428,178 @@ const styles = StyleSheet.create({
   profileHeroCard: {
     backgroundColor: colors.card,
     borderRadius: 24,
-    padding: 24,
+    padding: 20,
     alignItems: 'center',
+    marginTop: -20,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    ...shadows.elevated,
   },
   avatarImg: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    marginBottom: 12,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
     borderWidth: 3,
-    borderColor: colors.primary,
+    borderColor: '#86EFAC',
+    marginBottom: 10,
   },
   avatarPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: '#86EFAC',
+    marginBottom: 10,
   },
   avatarPlaceholderText: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
     color: colors.primary,
   },
   profileName: {
     fontSize: 20,
-    fontWeight: '900',
+    fontWeight: 'bold',
     color: colors.text,
+    marginBottom: 2,
   },
   profileEmail: {
     fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2,
+    color: colors.textSecondary,
+    marginBottom: 4,
   },
   profileDepartment: {
     fontSize: 13,
-    fontWeight: '600',
     color: colors.primaryDark,
-    marginTop: 4,
+    fontWeight: '600',
+    marginBottom: 10,
   },
   ratingBadge: {
-    backgroundColor: colors.badgeGoldBg,
+    backgroundColor: '#FEF3C7',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 14,
-    marginTop: 10,
+    marginBottom: 10,
   },
   ratingBadgeText: {
-    color: colors.badgeGoldText,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  badgePill: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgePillText: {
+    fontSize: 11,
+    color: colors.primaryDark,
+    fontWeight: '700',
   },
   photoActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 14,
+    gap: 16,
   },
   photoActionText: {
     color: colors.primary,
     fontWeight: '700',
     fontSize: 13,
-    marginHorizontal: 8,
   },
   photoDeleteText: {
     color: colors.danger,
-    fontWeight: '700',
+    fontWeight: '600',
     fontSize: 13,
-    marginHorizontal: 8,
+  },
+  statsCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    ...shadows.card,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  statsCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  statsCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  statsCardSub: {
+    fontSize: 11,
+    color: colors.textLight,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingVertical: 12,
+  },
+  statMiniCol: {
+    alignItems: 'center',
+  },
+  statMiniValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: colors.primaryDark,
+  },
+  statMiniLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  statMiniDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
   },
   linksCard: {
     backgroundColor: colors.card,
     borderRadius: 20,
     padding: 14,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
     ...shadows.card,
   },
   linkItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingVertical: 10,
   },
   linkIcon: {
-    fontSize: 24,
+    fontSize: 22,
   },
   linkTitle: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: colors.text,
   },
   linkSub: {
     fontSize: 11,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   arrowIcon: {
-    fontSize: 18,
-    color: colors.primary,
+    fontSize: 16,
+    color: colors.textLight,
     fontWeight: 'bold',
   },
   divider: {
@@ -452,108 +609,123 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
     ...shadows.card,
   },
   cardTitre: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.text,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   label: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
     marginBottom: 6,
+    marginTop: 6,
   },
   input: {
-    backgroundColor: colors.card,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     fontSize: 14,
     color: colors.text,
-    marginBottom: 14,
+    marginBottom: 4,
   },
   prefRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
   },
   prefTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.text,
   },
   prefSub: {
     fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1,
+    color: colors.textLight,
   },
   musiqueRow: {
     flexDirection: 'row',
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 16,
   },
   musiqueChip: {
     flex: 1,
-    paddingVertical: 10,
-    marginRight: 6,
+    paddingVertical: 8,
     borderRadius: 12,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   musiqueChipActif: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
   },
   musiqueChipTexte: {
     fontSize: 12,
-    fontWeight: '700',
-    color: colors.text,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
   musiqueChipTexteActif: {
     color: colors.white,
   },
   boutonEnregistrer: {
     backgroundColor: colors.primary,
-    paddingVertical: 15,
-    borderRadius: 25,
+    paddingVertical: 13,
+    borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
+    marginTop: 10,
   },
   boutonEnregistrerTexte: {
     color: colors.white,
-    fontWeight: '800',
-    fontSize: 15,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  boutonSignalerProbleme: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 16,
+    ...shadows.card,
+  },
+  iconeBouclier: {
+    fontSize: 22,
+  },
+  titreSignaler: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9F1239',
+  },
+  descSignaler: {
+    fontSize: 11,
+    color: '#BE123C',
+    marginTop: 1,
   },
   boutonDeconnexion: {
-    backgroundColor: colors.dangerLight,
+    backgroundColor: '#FEE2E2',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#FCA5A5',
     paddingVertical: 14,
-    borderRadius: 25,
+    borderRadius: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 14,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   boutonDeconnexionTexte: {
-    color: colors.danger,
+    color: '#DC2626',
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 14,
   },
 });
