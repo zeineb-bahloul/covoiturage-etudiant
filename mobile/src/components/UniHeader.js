@@ -1,37 +1,60 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors } from '../theme';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { colors, shadows } from '../theme';
 
-export default function UniHeader({ title, subtitle, navigation, showBack = true, rightComponent }) {
+export default function UniHeader({
+  title,
+  titre,
+  subtitle,
+  sousTitre,
+  navigation,
+  onBack,
+  showBack = true,
+  rightComponent,
+  variant = 'primary',
+}) {
+  const displayTitle = title || titre || '';
+  const displaySubtitle = subtitle || sousTitre || '';
+  const handleBack = onBack || (navigation ? () => navigation.goBack() : null);
+  const isPrimary = variant === 'primary';
+
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, isPrimary ? styles.headerPrimary : styles.headerLight]}>
       <View style={styles.topRow}>
-        {showBack && navigation ? (
+        {showBack && handleBack ? (
           <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            style={[styles.backButton, isPrimary ? styles.backButtonPrimary : styles.backButtonLight]}
+            onPress={handleBack}
             activeOpacity={0.7}
           >
-            <Text style={styles.backArrow}>←</Text>
+            <Text style={[styles.backArrow, isPrimary ? styles.backArrowPrimary : styles.backArrowLight]}>
+              {'‹'}
+            </Text>
           </TouchableOpacity>
         ) : (
           <View style={styles.logoBadge}>
-            <Text style={styles.logoIcon}>🚗🍃</Text>
+            <Text style={styles.logoLetter}>U</Text>
           </View>
         )}
 
         <View style={styles.titleContainer}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
+          <Text
+            style={[styles.title, isPrimary ? styles.titlePrimary : styles.titleLight]}
+            numberOfLines={1}
+          >
+            {displayTitle}
           </Text>
-          {subtitle ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
+          {displaySubtitle ? (
+            <Text
+              style={[styles.subtitle, isPrimary ? styles.subtitlePrimary : styles.subtitleLight]}
+              numberOfLines={1}
+            >
+              {displaySubtitle}
             </Text>
           ) : null}
         </View>
 
-        <View style={styles.rightSlot}>{rightComponent || <View style={{ width: 40 }} />}</View>
+        <View style={styles.rightSlot}>{rightComponent || <View style={{ width: 36 }} />}</View>
       </View>
     </View>
   );
@@ -39,10 +62,18 @@ export default function UniHeader({ title, subtitle, navigation, showBack = true
 
 const styles = StyleSheet.create({
   header: {
+    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+    paddingBottom: 16,
+    paddingHorizontal: 18,
+    ...shadows.card,
+  },
+  headerPrimary: {
+    backgroundColor: colors.primary,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerLight: {
     backgroundColor: colors.card,
-    paddingTop: 16,
-    paddingBottom: 14,
-    paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
@@ -52,51 +83,70 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  backButtonPrimary: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  backButtonLight: {
+    backgroundColor: colors.background,
   },
   backArrow: {
-    fontSize: 20,
-    color: colors.primary,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontWeight: '700',
+    lineHeight: 28,
+  },
+  backArrowPrimary: {
+    color: colors.white,
+  },
+  backArrowLight: {
+    color: colors.text,
   },
   logoBadge: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoIcon: {
+  logoLetter: {
     fontSize: 18,
+    fontWeight: '900',
+    color: colors.navy,
   },
   titleContainer: {
     flex: 1,
     paddingHorizontal: 12,
-    alignItems: 'center',
   },
   title: {
     fontSize: 18,
     fontWeight: '800',
-    color: colors.text,
     letterSpacing: -0.3,
+  },
+  titlePrimary: {
+    color: colors.white,
+  },
+  titleLight: {
+    color: colors.text,
   },
   subtitle: {
     fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 2,
   },
+  subtitlePrimary: {
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  subtitleLight: {
+    color: colors.textMuted,
+  },
   rightSlot: {
-    minWidth: 40,
+    minWidth: 38,
     alignItems: 'flex-end',
   },
 });
-

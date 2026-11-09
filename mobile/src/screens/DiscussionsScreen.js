@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,80 @@ import {
 } from 'react-native';
 import api from '../api';
 import UniHeader from '../components/UniHeader';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
+
+const formaterHeure = (dateStr) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const mnt = new Date();
+  const estAujourdhui = d.toDateString() === mnt.toDateString();
+  if (estAujourdhui) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+};
+
+const DiscussionCard = memo(({ item, onOpen }) => {
+  const contact = item.autreParticipant;
+  const initiales = contact?.nom ? contact.nom[0].toUpperCase() : 'U';
+
+  return (
+    <TouchableOpacity
+      style={[s.convCard, item.nonLu && s.convCardNonLu]}
+      onPress={() => onOpen(item, contact)}
+      activeOpacity={0.7}
+    >
+      <View style={s.avatarContainer}>
+        {contact?.photo ? (
+          <Image source={{ uri: contact.photo }} style={s.avatar} />
+        ) : (
+          <View style={s.avatarPlaceholder}>
+            <Text style={s.avatarText}>{initiales}</Text>
+          </View>
+        )}
+        <View style={s.onlineDot} />
+      </View>
+
+      <View style={s.infoContainer}>
+        <View style={s.topRow}>
+          <Text style={[s.contactName, item.nonLu && s.contactNameBold]} numberOfLines={1}>
+            {contact?.nom || 'Covoitureur UniRide'}
+          </Text>
+          <Text style={s.timeText}>
+            {formaterHeure(item.dernierMessage?.date || item.updatedAt)}
+          </Text>
+        </View>
+
+        {item.titre ? (
+          <View style={s.tripTag}>
+            <Text style={s.tripTagText} numberOfLines={1}>
+              🚗 {item.titre}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={s.bottomRow}>
+          <Text
+            style={[s.lastMsgText, item.nonLu && s.lastMsgTextBold]}
+            numberOfLines={1}
+          >
+            {item.dernierMessage?.texte || 'Nouvelle discussion'}
+          </Text>
+
+          {item.nonLu && (
+            <View style={s.unreadBadge}>
+              <Text style={s.unreadBadgeText}>1</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 export default function DiscussionsScreen({ navigation }) {
   const [conversations, setConversations] = useState([]);
-  const [filtre, setFiltre] = useState('tous'); // 'tous', 'trajets', 'non_lus'
+  const [filtre, setFiltre] = useState('tous'); // 'tous', 'actifs', 'archives'
   const [recherche, setRecherche] = useState('');
   const [chargement, setChargement] = useState(true);
   const [rafraichir, setRafraichir] = useState(false);
@@ -40,7 +109,6 @@ export default function DiscussionsScreen({ navigation }) {
   }, [navigation, chargerConversations]);
 
   const conversationsFiltrees = conversations.filter((c) => {
-    // Filtre de recherche
     const nomMatch = c.autreParticipant?.nom
       ?.toLowerCase()
       .includes(recherche.toLowerCase());
@@ -50,154 +118,81 @@ export default function DiscussionsScreen({ navigation }) {
       .includes(recherche.toLowerCase());
 
     const correspondRecherche = !recherche || nomMatch || trajetMatch || dernierMsgMatch;
-
     if (!correspondRecherche) return false;
 
-    if (filtre === 'non_lus') return c.nonLu;
-    if (filtre === 'trajets') return !!c.trajet;
+    if (filtre === 'actifs') return c.autreParticipant?.vehicule || c.titre;
+    if (filtre === 'archives') return false;
     return true;
   });
 
-  const formaterHeure = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    const mnt = new Date();
-    const estAujourdhui = d.toDateString() === mnt.toDateString();
-    if (estAujourdhui) {
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
-  };
+  const handleOpen = useCallback((item, contact) => {
+    navigation.navigate('Chat', {
+      conversationId: item._id,
+      contactNom: contact?.nom || 'Covoitureur',
+      contactPhoto: contact?.photo,
+      contactFiliere: contact?.filiere,
+      trajetTitre: item.titre,
+    });
+  }, [navigation]);
 
-  const renderItem = ({ item }) => {
-    const contact = item.autreParticipant;
-    const initiales = contact?.nom ? contact.nom[0].toUpperCase() : 'U';
-
-    return (
-      <TouchableOpacity
-        style={[styles.convCard, item.nonLu && styles.convCardNonLu]}
-        onPress={() =>
-          navigation.navigate('Chat', {
-            conversationId: item._id,
-            contactNom: contact?.nom || 'Covoitureur',
-            contactPhoto: contact?.photo,
-            contactFiliere: contact?.filiere,
-            trajetTitre: item.titre,
-          })
-        }
-        activeOpacity={0.7}
-      >
-        <View style={styles.avatarConteneur}>
-          {contact?.photo ? (
-            <Image source={{ uri: contact.photo }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarTexte}>{initiales}</Text>
-            </View>
-          )}
-          <View style={styles.pastilleEnLigne} />
-        </View>
-
-        <View style={styles.infoConteneur}>
-          <View style={styles.titreLigne}>
-            <Text style={[styles.nomContact, item.nonLu && styles.texteGras]} numberOfLines={1}>
-              {contact?.nom || 'Covoitureur UniRide'}
-            </Text>
-            <Text style={styles.heureTexte}>
-              {formaterHeure(item.dernierMessage?.date || item.updatedAt)}
-            </Text>
-          </View>
-
-          {item.titre ? (
-            <View style={styles.trajetPill}>
-              <Text style={styles.trajetPillTexte} numberOfLines={1}>
-                🚗 {item.titre}
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={styles.dernierMsgLigne}>
-            <Text
-              style={[
-                styles.dernierMsgTexte,
-                item.nonLu && styles.dernierMsgTexteNonLu,
-              ]}
-              numberOfLines={1}
-            >
-              {item.dernierMessage?.texte || 'Nouvelle discussion'}
-            </Text>
-
-            {item.nonLu && (
-              <View style={styles.badgeNonLu}>
-                <Text style={styles.badgeNonLuTexte}>1</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = useCallback(({ item }) => (
+    <DiscussionCard item={item} onOpen={handleOpen} />
+  ), [handleOpen]);
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
       <UniHeader
-        titre="Discussions"
-        sousTitre="Échangez avec vos covoitureurs"
+        title="Messages"
+        subtitle="Discussions & Covoiturages"
         onBack={() => navigation.navigate('Home')}
+        showBack={true}
       />
 
-      {/* Barre de recherche */}
-      <View style={styles.rechercheConteneur}>
-        <View style={styles.rechercheBarre}>
-          <Text style={styles.rechercheIcone}>🔍</Text>
+      {/* ─── Barre de Recherche ─── */}
+      <View style={s.searchContainer}>
+        <View style={s.searchBox}>
+          <Text style={s.searchIcon}>🔍</Text>
           <TextInput
-            style={styles.rechercheInput}
-            placeholder="Rechercher une discussion..."
-            placeholderTextColor={colors.textLight}
+            style={s.searchInput}
+            placeholder="Rechercher une conversation, un trajet..."
+            placeholderTextColor="#94A3B8"
             value={recherche}
             onChangeText={setRecherche}
           />
           {recherche ? (
             <TouchableOpacity onPress={() => setRecherche('')}>
-              <Text style={styles.effacerIcone}>✕</Text>
+              <Text style={s.clearIcon}>✕</Text>
             </TouchableOpacity>
           ) : null}
         </View>
       </View>
 
-      {/* Onglets de filtre (Tous, Trajets, Non lus) */}
-      <View style={styles.filtresBarre}>
-        <TouchableOpacity
-          style={[styles.filtreBouton, filtre === 'tous' && styles.filtreBoutonActif]}
-          onPress={() => setFiltre('tous')}
-        >
-          <Text style={[styles.filtreTexte, filtre === 'tous' && styles.filtreTexteActif]}>
-            Tous
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filtreBouton, filtre === 'trajets' && styles.filtreBoutonActif]}
-          onPress={() => setFiltre('trajets')}
-        >
-          <Text style={[styles.filtreTexte, filtre === 'trajets' && styles.filtreTexteActif]}>
-            Trajets
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filtreBouton, filtre === 'non_lus' && styles.filtreBoutonActif]}
-          onPress={() => setFiltre('non_lus')}
-        >
-          <Text style={[styles.filtreTexte, filtre === 'non_lus' && styles.filtreTexteActif]}>
-            Non lus
-          </Text>
-        </TouchableOpacity>
+      {/* ─── Onglets Filtres (Page 10 PDF) ─── */}
+      <View style={s.tabsContainer}>
+        {[
+          { cle: 'tous', label: 'Tous' },
+          { cle: 'actifs', label: 'Trajets Actifs' },
+          { cle: 'archives', label: 'Archives' },
+        ].map((tab) => {
+          const isActive = filtre === tab.cle;
+          return (
+            <TouchableOpacity
+              key={tab.cle}
+              style={[s.tabPill, isActive && s.tabPillActive]}
+              onPress={() => setFiltre(tab.cle)}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.tabPillText, isActive && s.tabPillTextActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {/* Liste des discussions */}
+      {/* ─── Liste des Conversations ─── */}
       {chargement ? (
-        <View style={styles.centre}>
+        <View style={s.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
@@ -205,7 +200,8 @@ export default function DiscussionsScreen({ navigation }) {
           data={conversationsFiltrees}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listeConteneur}
+          contentContainerStyle={s.listContent}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={rafraichir}
@@ -217,11 +213,13 @@ export default function DiscussionsScreen({ navigation }) {
             />
           }
           ListEmptyComponent={
-            <View style={styles.videConteneur}>
-              <Text style={styles.videIcone}>💬</Text>
-              <Text style={styles.videTitre}>Aucune discussion</Text>
-              <Text style={styles.videSousTitre}>
-                Vos échanges avec les conducteurs et passagers apparaîtront ici pour convenir de vos points de rendez-vous.
+            <View style={s.emptyContainer}>
+              <Text style={s.emptyIcon}>💬</Text>
+              <Text style={s.emptyTitle}>Aucun message</Text>
+              <Text style={s.emptySubtitle}>
+                {recherche
+                  ? 'Aucune conversation trouvée pour cette recherche.'
+                  : 'Contactez un conducteur depuis un trajet pour commencer une discussion.'}
               </Text>
             </View>
           }
@@ -231,87 +229,91 @@ export default function DiscussionsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  centre: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  rechercheConteneur: {
-    paddingHorizontal: 20,
-    marginTop: -16,
-    marginBottom: 10,
-  },
-  rechercheBarre: {
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     ...shadows.card,
   },
-  rechercheIcone: {
-    fontSize: 16,
+  searchIcon: {
+    fontSize: 14,
     marginRight: 8,
   },
-  rechercheInput: {
+  searchInput: {
     flex: 1,
     fontSize: 14,
-    color: colors.text,
+    color: '#0F172A',
   },
-  effacerIcone: {
+  clearIcon: {
+    color: '#94A3B8',
     fontSize: 14,
-    color: colors.textLight,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
   },
-  filtresBarre: {
+  tabsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 8,
   },
-  filtreBouton: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
+  tabPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  filtreBoutonActif: {
+  tabPillActive: {
     backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  filtreTexte: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  filtreTexteActif: {
-    color: colors.white,
+  tabPillText: {
+    fontSize: 12,
     fontWeight: '700',
+    color: '#64748B',
   },
-  listeConteneur: {
-    paddingHorizontal: 20,
-    paddingBottom: 25,
+  tabPillTextActive: {
+    color: '#FFFFFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 30,
   },
   convCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 14,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
     ...shadows.card,
   },
   convCardNonLu: {
-    backgroundColor: '#F0FDF4',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
+    backgroundColor: '#F8FAFC',
+    borderColor: '#BFDBFE',
   },
-  avatarConteneur: {
+  avatarContainer: {
     position: 'relative',
     marginRight: 14,
   },
@@ -319,21 +321,23 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
+    borderWidth: 2,
+    borderColor: colors.accent,
   },
   avatarPlaceholder: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
+    backgroundColor: colors.primary,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  avatarTexte: {
+  avatarText: {
+    color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.primary,
+    fontWeight: '800',
   },
-  pastilleEnLigne: {
+  onlineDot: {
     position: 'absolute',
     bottom: 2,
     right: 2,
@@ -342,94 +346,93 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#22C55E',
     borderWidth: 2,
-    borderColor: colors.card,
+    borderColor: '#FFFFFF',
   },
-  infoConteneur: {
+  infoContainer: {
     flex: 1,
   },
-  titreLigne: {
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 2,
   },
-  nomContact: {
+  contactName: {
     fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: '#0F172A',
     flex: 1,
   },
-  texteGras: {
+  contactNameBold: {
     fontWeight: '800',
-    color: colors.text,
   },
-  heureTexte: {
+  timeText: {
     fontSize: 11,
-    color: colors.textLight,
+    color: '#94A3B8',
+    fontWeight: '600',
     marginLeft: 8,
   },
-  trajetPill: {
-    backgroundColor: '#ECFDF5',
+  tripTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
+    marginVertical: 4,
   },
-  trajetPillTexte: {
+  tripTagText: {
     fontSize: 11,
-    color: colors.primaryDark,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: colors.primary,
   },
-  dernierMsgLigne: {
+  bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 2,
   },
-  dernierMsgTexte: {
+  lastMsgText: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: '#64748B',
     flex: 1,
   },
-  dernierMsgTexteNonLu: {
-    color: colors.text,
+  lastMsgTextBold: {
+    color: '#0F172A',
     fontWeight: '700',
   },
-  badgeNonLu: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    minWidth: 20,
+  unreadBadge: {
+    backgroundColor: colors.accent,
+    width: 20,
     height: 20,
-    justifyContent: 'center',
+    borderRadius: 10,
     alignItems: 'center',
-    paddingHorizontal: 6,
+    justifyContent: 'center',
     marginLeft: 8,
   },
-  badgeNonLuTexte: {
-    color: colors.white,
+  unreadBadgeText: {
+    color: colors.navy,
     fontSize: 11,
-    fontWeight: 'bold',
+    fontWeight: '900',
   },
-  videConteneur: {
+  emptyContainer: {
     alignItems: 'center',
     paddingTop: 60,
     paddingHorizontal: 30,
   },
-  videIcone: {
-    fontSize: 50,
-    marginBottom: 14,
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 12,
   },
-  videTitre: {
+  emptyTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 8,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
   },
-  videSousTitre: {
+  emptySubtitle: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: '#64748B',
     textAlign: 'center',
     lineHeight: 18,
   },
 });
-

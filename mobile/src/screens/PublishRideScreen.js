@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ScrollView,
   View,
@@ -11,17 +11,17 @@ import {
   StyleSheet,
 } from 'react-native';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import AddressPicker from '../components/AddressPicker';
 import UniHeader from '../components/UniHeader';
 
 const JOURS = [
-  { cle: 'lundi', label: 'Lun' },
-  { cle: 'mardi', label: 'Mar' },
-  { cle: 'mercredi', label: 'Mer' },
-  { cle: 'jeudi', label: 'Jeu' },
-  { cle: 'vendredi', label: 'Ven' },
-  { cle: 'samedi', label: 'Sam' },
+  { cle: 'lundi', label: 'L' },
+  { cle: 'mardi', label: 'M' },
+  { cle: 'mercredi', label: 'M' },
+  { cle: 'jeudi', label: 'J' },
+  { cle: 'vendredi', label: 'V' },
+  { cle: 'samedi', label: 'S' },
 ];
 
 const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -29,19 +29,23 @@ const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
 export default function PublishRideScreen({ navigation }) {
   const [depart, setDepart] = useState(null);
   const [destination, setDestination] = useState(null);
-  const [heure, setHeure] = useState('');
-  const [places, setPlaces] = useState('3');
+  const [heure, setHeure] = useState('07:45');
+  const [places, setPlaces] = useState(3);
   const [prix, setPrix] = useState('2.5');
   const [recurrent, setRecurrent] = useState(true);
   const [jours, setJours] = useState(['lundi', 'mardi', 'mercredi', 'jeudi']);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [envoi, setEnvoi] = useState(false);
 
-  const basculerJour = (cle) => {
+  const basculerJour = useCallback((cle) => {
     setJours((avant) => (avant.includes(cle) ? avant.filter((j) => j !== cle) : [...avant, cle]));
-  };
+  }, []);
 
-  const publier = async () => {
+  const modifierPlaces = useCallback((delta) => {
+    setPlaces((prev) => Math.min(6, Math.max(1, prev + delta)));
+  }, []);
+
+  const publier = useCallback(async () => {
     if (!depart || !destination) {
       Alert.alert('Champs requis', 'Veuillez sélectionner le départ et la destination');
       return;
@@ -70,15 +74,15 @@ export default function PublishRideScreen({ navigation }) {
         destination,
         heureDepart: heure,
         places: Number(places),
-        prix: Number(prix.replace(',', '.')),
+        prix: Number(String(prix).replace(',', '.')),
         recurrent,
         jours: recurrent ? jours : [],
         date: recurrent ? undefined : date,
       });
 
       Alert.alert(
-        'Trajet publié avec succès ! 🚗',
-        `Distance : ${data.distanceKm} km, durée environ ${data.dureeMin} min.\nArrivée prévue à ${data.heureArrivee}. Vos camarades peuvent maintenant réserver !`,
+        'Trajet publié avec succès !',
+        `Distance : ${data.distanceKm} km, durée ~${data.dureeMin} min.\nArrivée prévue à ${data.heureArrivee}. Vos camarades peuvent maintenant réserver !`,
         [{ text: 'Voir mes trajets', onPress: () => navigation.goBack() }]
       );
     } catch (err) {
@@ -86,25 +90,34 @@ export default function PublishRideScreen({ navigation }) {
     } finally {
       setEnvoi(false);
     }
-  };
+  }, [depart, destination, heure, places, prix, recurrent, jours, date, navigation]);
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
       <UniHeader
-        title="Publier un trajet"
-        subtitle="Proposer des places libres"
+        title="Proposer un trajet"
+        subtitle="Partagez vos trajets vers l'ISET"
         navigation={navigation}
         showBack={true}
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.card}>
+      <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* ─── Carte Itinéraire (Page 9 PDF) ─── */}
+        <View style={s.card}>
+          <Text style={s.cardSectionTitle}>ITINÉRAIRE</Text>
+
           <AddressPicker
             titre="Point de départ"
             valeur={depart}
             onChoisir={setDepart}
-            placeholder="Ex : Ariana, Hammamet, Nabeul..."
+            placeholder="Ex : Gare Nabeul, Hammamet..."
           />
+
+          <View style={s.routeDivider}>
+            <View style={s.routeDotBlue} />
+            <View style={s.routeLine} />
+            <View style={s.routeDotYellow} />
+          </View>
 
           <AddressPicker
             titre="Destination"
@@ -112,68 +125,50 @@ export default function PublishRideScreen({ navigation }) {
             onChoisir={setDestination}
             placeholder="Ex : ISET Nabeul"
           />
+        </View>
 
-          <Text style={styles.label}>Heure de départ</Text>
+        {/* ─── Horaire & Fréquence ─── */}
+        <View style={s.card}>
+          <Text style={s.cardSectionTitle}>HORAIRE & FRÉQUENCE</Text>
+
+          <Text style={s.fieldLabel}>HEURE DE DÉPART</Text>
           <TextInput
-            style={styles.input}
+            style={s.input}
             value={heure}
             onChangeText={setHeure}
             placeholder="07:45"
-            placeholderTextColor={colors.textLight}
+            placeholderTextColor="#94A3B8"
             keyboardType="numbers-and-punctuation"
             maxLength={5}
           />
 
-          <View style={styles.rowChamps}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={styles.label}>Places libres</Text>
-              <TextInput
-                style={styles.input}
-                value={places}
-                onChangeText={setPlaces}
-                keyboardType="number-pad"
-                placeholder="3"
-              />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Prix / passager (DT)</Text>
-              <TextInput
-                style={styles.input}
-                value={prix}
-                onChangeText={setPrix}
-                keyboardType="decimal-pad"
-                placeholder="2.5"
-              />
-            </View>
-          </View>
-
-          <View style={styles.recurrentRow}>
+          <View style={s.recurrentRow}>
             <View>
-              <Text style={styles.recurrentTitle}>Trajet récurrent</Text>
-              <Text style={styles.recurrentSub}>Répété chaque semaine selon vos cours</Text>
+              <Text style={s.recurrentTitle}>Trajet régulier</Text>
+              <Text style={s.recurrentSub}>Répété chaque semaine selon vos cours</Text>
             </View>
             <Switch
               value={recurrent}
               onValueChange={setRecurrent}
-              trackColor={{ false: colors.border, true: colors.primary }}
+              trackColor={{ false: '#E2E8F0', true: colors.primary }}
+              thumbColor={recurrent ? colors.accent : '#FFF'}
             />
           </View>
 
           {recurrent ? (
-            <View style={styles.joursSection}>
-              <Text style={[styles.label, { marginBottom: 8 }]}>Jours du trajet :</Text>
-              <View style={styles.joursGrid}>
+            <View style={s.joursSection}>
+              <Text style={s.fieldLabel}>JOURS DU TRAJET</Text>
+              <View style={s.joursRow}>
                 {JOURS.map((j) => {
                   const actif = jours.includes(j.cle);
                   return (
                     <TouchableOpacity
                       key={j.cle}
                       onPress={() => basculerJour(j.cle)}
-                      style={[styles.jourChip, actif && styles.jourChipActif]}
+                      style={[s.jourCircle, actif && s.jourCircleActif]}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.jourChipTexte, actif && styles.jourChipTexteActif]}>
+                      <Text style={[s.jourCircleText, actif && s.jourCircleTextActif]}>
                         {j.label}
                       </Text>
                     </TouchableOpacity>
@@ -182,38 +177,113 @@ export default function PublishRideScreen({ navigation }) {
               </View>
             </View>
           ) : (
-            <View style={{ marginTop: 12 }}>
-              <Text style={styles.label}>Date du trajet ponctuel</Text>
+            <View style={{ marginTop: 10 }}>
+              <Text style={s.fieldLabel}>DATE DU TRAJET</Text>
               <TextInput
-                style={styles.input}
+                style={s.input}
                 value={date}
                 onChangeText={setDate}
                 placeholder="AAAA-MM-JJ"
+                placeholderTextColor="#94A3B8"
                 keyboardType="numbers-and-punctuation"
                 maxLength={10}
               />
             </View>
           )}
-
-          <TouchableOpacity
-            style={styles.boutonPublier}
-            onPress={publier}
-            disabled={envoi}
-            activeOpacity={0.85}
-          >
-            {envoi ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.boutonPublierTexte}>Publier mon trajet</Text>
-            )}
-          </TouchableOpacity>
         </View>
+
+        {/* ─── Places et Prix ─── */}
+        <View style={s.card}>
+          <Text style={s.cardSectionTitle}>PLACES & TARIF</Text>
+
+          {/* Stepper places */}
+          <View style={s.stepperRow}>
+            <View>
+              <Text style={s.stepperTitle}>Places disponibles</Text>
+              <Text style={s.stepperSub}>Passagers acceptés dans le véhicule</Text>
+            </View>
+
+            <View style={s.stepperControls}>
+              <TouchableOpacity
+                style={s.stepperBtn}
+                onPress={() => modifierPlaces(-1)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.stepperBtnText}>−</Text>
+              </TouchableOpacity>
+              <Text style={s.stepperValue}>{places}</Text>
+              <TouchableOpacity
+                style={s.stepperBtn}
+                onPress={() => modifierPlaces(1)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.stepperBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={s.divider} />
+
+          {/* Tarif par passager */}
+          <View style={s.priceSection}>
+            <View style={s.priceHeader}>
+              <View>
+                <Text style={s.stepperTitle}>Participation aux frais</Text>
+                <Text style={s.stepperSub}>Prix conseillé par passager</Text>
+              </View>
+
+              <View style={s.priceInputBox}>
+                <TextInput
+                  style={s.priceInput}
+                  value={String(prix)}
+                  onChangeText={setPrix}
+                  keyboardType="decimal-pad"
+                  placeholder="2.5"
+                  placeholderTextColor="#94A3B8"
+                />
+                <Text style={s.priceCurrency}>DT</Text>
+              </View>
+            </View>
+
+            {/* Suggestions rapides de prix */}
+            <View style={s.priceChipsRow}>
+              {['1.5', '2.0', '2.5', '3.0'].map((p) => {
+                const isSelected = String(prix) === p;
+                return (
+                  <TouchableOpacity
+                    key={p}
+                    style={[s.priceChip, isSelected && s.priceChipSelected]}
+                    onPress={() => setPrix(p)}
+                  >
+                    <Text style={[s.priceChipText, isSelected && s.priceChipTextSelected]}>
+                      {p} DT
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* ─── Bouton de publication (Bleu Royal) ─── */}
+        <TouchableOpacity
+          style={s.publishBtn}
+          onPress={publier}
+          disabled={envoi}
+          activeOpacity={0.85}
+        >
+          {envoi ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={s.publishBtnText}>Publier mon trajet 🚗</Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -223,99 +293,225 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: '#E2E8F0',
     ...shadows.card,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
+  cardSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primary,
     letterSpacing: 0.8,
+    marginBottom: 14,
+  },
+  routeDivider: {
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  routeDotBlue: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  routeLine: {
+    width: 2,
+    height: 16,
+    backgroundColor: '#CBD5E1',
+    marginVertical: 2,
+  },
+  routeDotYellow: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.6,
     marginBottom: 6,
+    marginTop: 6,
   },
   input: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 16,
-  },
-  rowChamps: {
-    flexDirection: 'row',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   recurrentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    marginTop: 16,
+    paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    marginTop: 4,
+    borderTopColor: '#F1F5F9',
   },
   recurrentTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: colors.text,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   recurrentSub: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: '#64748B',
     marginTop: 2,
   },
   joursSection: {
+    marginTop: 14,
+  },
+  joursRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginTop: 8,
   },
-  joursGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-  },
-  jourChip: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
+  jourCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    marginRight: 8,
-    marginBottom: 8,
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
   },
-  jourChipActif: {
+  jourCircleActif: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  jourChipTexte: {
-    fontSize: 13,
+  jourCircleText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  jourCircleTextActif: {
+    color: '#FFFFFF',
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  stepperTitle: {
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.text,
+    color: '#0F172A',
   },
-  jourChipTexteActif: {
-    color: colors.white,
+  stepperSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
-  boutonPublier: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 25,
+  stepperControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stepperBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
-    ...shadows.card,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
   },
-  boutonPublierTexte: {
-    color: colors.white,
+  stepperBtnText: {
+    fontSize: 18,
     fontWeight: '800',
+    color: colors.primary,
+  },
+  stepperValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 14,
+  },
+  priceSection: {},
+  priceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  priceInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  priceInput: {
     fontSize: 16,
-    letterSpacing: 0.3,
+    fontWeight: '800',
+    color: '#0F172A',
+    width: 44,
+    textAlign: 'center',
+  },
+  priceCurrency: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary,
+    marginLeft: 4,
+  },
+  priceChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  priceChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  priceChipSelected: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  priceChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  priceChipTextSelected: {
+    color: colors.primary,
+    fontWeight: '800',
+  },
+  publishBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 24,
+    alignItems: 'center',
+    ...shadows.elevated,
+    marginTop: 8,
+  },
+  publishBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
 });

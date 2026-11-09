@@ -1,38 +1,114 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  ScrollView,
+  FlatList,
   Image,
   StyleSheet,
   RefreshControl,
-  Alert,
+  Platform,
 } from 'react-native';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 
-export default function HomeScreen({ navigation, onLogout }) {
+/* ─── Carte Suggestion IA (Fidèle à la Page 4) ──────────────── */
+const SuggestionCard = memo(({ item, onSelectDetail }) => {
+  const conducteur = item.conducteur || item.conducteurId || {};
+
+  return (
+    <View style={s.card}>
+      <View style={s.cardTopRow}>
+        <View style={s.driverRow}>
+          {conducteur?.photo ? (
+            <Image source={{ uri: conducteur.photo }} style={s.avatar} />
+          ) : (
+            <View style={s.avatarPlaceholder}>
+              <Text style={s.avatarInitial}>
+                {conducteur?.nom ? conducteur.nom[0].toUpperCase() : 'C'}
+              </Text>
+            </View>
+          )}
+          <View>
+            <Text style={s.driverName}>{conducteur?.nom || 'Karim Z.'}</Text>
+            <Text style={s.driverRating}>
+              ★ {(conducteur?.noteMoyenne || 4.8).toFixed(1)} ({conducteur?.nombreAvis || 12} avis)
+            </Text>
+          </View>
+        </View>
+
+        <View style={s.priceBox}>
+          <Text style={s.priceAmount}>{item.prix || 20} DT</Text>
+          <Text style={s.priceSub}>par semaine</Text>
+        </View>
+      </View>
+
+      {/* Trajet */}
+      <View style={s.routeBox}>
+        <View style={s.routeItem}>
+          <View style={s.dotBlue} />
+          <Text style={s.routeText}>
+            Arrivée à {item.heureArrivee || '8h15'} ({item.destination?.label?.split(',')[0] || 'ISET Nabeul'})
+          </Text>
+        </View>
+        <View style={s.routeItem}>
+          <View style={s.dotGray} />
+          <Text style={s.routeTextMuted}>
+            Départ {item.depart?.label?.split(',')[0] || 'Ariana'} (1.5 km de vous)
+          </Text>
+        </View>
+      </View>
+
+      {/* Footer Tags & Bouton Détails */}
+      <View style={s.cardFooter}>
+        <View style={s.tagsRow}>
+          <View style={s.tagPill}>
+            <Text style={s.tagText}>NON-FUMEUR</Text>
+          </View>
+          <View style={s.tagPill}>
+            <Text style={s.tagText}>MIXTE</Text>
+          </View>
+          <View style={s.badgeMatch}>
+            <Text style={s.badgeMatchText}>{item.scoreMatch || 91}% COMPATIBLE</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={s.btnDetails}
+          onPress={() => onSelectDetail(item._id)}
+          activeOpacity={0.8}
+        >
+          <Text style={s.btnDetailsText}>Détails</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+/* ─── Écran Accueil (Page 4) ────────────────────────────────── */
+export default function HomeScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
+  const [stats, setStats] = useState(null);
   const [nbNotifs, setNbNotifs] = useState(0);
   const [chargement, setChargement] = useState(true);
   const [rafraichir, setRafraichir] = useState(false);
-  const [ongletActif, setOngletActif] = useState('accueil');
 
   const charger = useCallback(async () => {
     try {
-      const [resUser, resSugg, resNotif] = await Promise.all([
+      const [resUser, resSugg, resNotif, resStats] = await Promise.all([
         api.get('/auth/me'),
         api.get('/rides/suggestions').catch(() => ({ data: [] })),
         api.get('/notifications').catch(() => ({ data: { nbNonLues: 0 } })),
+        api.get('/stats/me').catch(() => ({ data: null })),
       ]);
       setUser(resUser.data);
       setSuggestions(resSugg.data || []);
       setNbNotifs(resNotif.data?.nbNonLues || 0);
+      setStats(resStats.data);
     } catch (err) {
-      console.log('Erreur chargement accueil :', err);
+      console.log('Erreur chargement :', err);
     } finally {
       setChargement(false);
       setRafraichir(false);
@@ -41,87 +117,151 @@ export default function HomeScreen({ navigation, onLogout }) {
 
   useEffect(() => {
     charger();
-    const unsubscribe = navigation.addListener('focus', charger);
-    return unsubscribe;
+    const unsub = navigation.addListener('focus', charger);
+    return unsub;
   }, [navigation, charger]);
+
+  const onSelectDetail = useCallback((id) => {
+    navigation.navigate('RideDetail', { id });
+  }, [navigation]);
 
   if (chargement) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={s.center}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
-  const prenom = user?.nom ? user.nom.split(' ')[0] : 'Étudiant';
+  const prenom = user?.nom ? user.nom.split(' ')[0] : 'Sara';
 
-  const confirmerDeconnexion = () => {
-    Alert.alert(
-      'Se déconnecter',
-      'Voulez-vous vraiment vous déconnecter de votre compte UniRide ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Oui, se déconnecter',
-          style: 'destructive',
-          onPress: async () => {
-            if (onLogout) {
-              await onLogout();
-            }
-          },
-        },
-      ]
-    );
-  };
+  const headerComponent = (
+    <>
+      {/* ─── Header Bleu Royal UniRide (Page 4) ─── */}
+      <View style={s.header}>
+        <View style={s.headerTopRow}>
+          <TouchableOpacity
+            style={s.userProfileRow}
+            onPress={() => navigation.navigate('Profile')}
+            activeOpacity={0.8}
+          >
+            {user?.photo ? (
+              <Image source={{ uri: user.photo }} style={s.headerAvatar} />
+            ) : (
+              <View style={s.headerAvatarPlaceholder}>
+                <Text style={s.headerAvatarInitial}>{prenom[0]}</Text>
+              </View>
+            )}
+            <View style={{ marginLeft: 10 }}>
+              <Text style={s.headerBonjour}>BONJOUR,</Text>
+              <Text style={s.headerUserName}>{prenom} 👋</Text>
+            </View>
+          </TouchableOpacity>
 
-  return (
-    <View style={styles.container}>
-      {/* Top Header Bar fidèle aux maquettes UniRide */}
-      <View style={styles.headerBar}>
-        <View style={styles.logoGroup}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoIcon}>🍃</Text>
+          <View style={s.headerActions}>
+            <TouchableOpacity
+              style={s.notifBtn}
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Text style={s.notifIcon}>🔔</Text>
+              {nbNotifs > 0 && <View style={s.notifBadge} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.publishRoundBtn}
+              onPress={() => navigation.navigate('PublishRide')}
+            >
+              <Text style={s.publishRoundBtnText}>+</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.logoText}>UniRide</Text>
         </View>
 
-        <View style={styles.headerRightGroup}>
-          <TouchableOpacity
-            style={styles.headerNotifBtn}
-            onPress={() => navigation.navigate('Notifications')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.headerNotifIcon}>🔔</Text>
-            {nbNotifs > 0 && (
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>{nbNotifs > 9 ? '9+' : nbNotifs}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+        <Text style={s.headerQuestion}>Où allons-nous aujourd'hui ?</Text>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-            {user?.photo ? (
-              <Image source={{ uri: user.photo }} style={styles.headerAvatar} />
-            ) : (
-              <View style={styles.headerAvatarPlaceholder}>
-                <Text style={styles.headerAvatarText}>{prenom[0]?.toUpperCase() || 'U'}</Text>
-              </View>
-            )}
+        {/* ─── Barre Dual Chercher / Publier ─── */}
+        <View style={s.searchToggleBar}>
+          <TouchableOpacity
+            style={s.searchYellowBtn}
+            onPress={() => navigation.navigate('SearchRide')}
+            activeOpacity={0.85}
+          >
+            <Text style={s.searchYellowText}>⌕ Chercher</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.headerLogoutBtn}
-            onPress={confirmerDeconnexion}
-            activeOpacity={0.7}
+            style={s.publishToggleBtn}
+            onPress={() => navigation.navigate('PublishRide')}
+            activeOpacity={0.85}
           >
-            <Text style={styles.headerLogoutIcon}>⎋</Text>
+            <Text style={s.publishToggleText}>🚗 Publier</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      {/* ─── Statistiques Écologiques (CO2 évité, Économisé) ─── */}
+      <View style={s.statsCardsRow}>
+        <View style={s.statCard}>
+          <View style={s.statIconCircleBlue}>
+            <Text style={s.statIcon}>🌱</Text>
+          </View>
+          <View style={{ marginLeft: 10 }}>
+            <Text style={s.statLabel}>CO₂ ÉVITÉ</Text>
+            <Text style={s.statValue}>{stats?.co2Economise || 12.5} kg</Text>
+          </View>
+        </View>
+
+        <View style={s.statCard}>
+          <View style={s.statIconCircleYellow}>
+            <Text style={s.statIcon}>💰</Text>
+          </View>
+          <View style={{ marginLeft: 10 }}>
+            <Text style={s.statLabel}>ÉCONOMISÉ</Text>
+            <Text style={s.statValue}>{stats?.argentEconomise || 45.0} DT</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ─── Section Suggestions IA ─── */}
+      <View style={s.sectionHeader}>
+        <Text style={s.sectionTitle}>Suggestions IA</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('SearchRide')}>
+          <Text style={s.voirToutText}>VOIR TOUT</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
+  return (
+    <View style={s.container}>
+      <FlatList
+        data={suggestions.length > 0 ? suggestions : [
+          {
+            _id: 'demo1',
+            conducteur: { nom: 'Karim Z.', noteMoyenne: 4.8, nombreAvis: 12 },
+            prix: 20,
+            heureDepart: '07:45',
+            heureArrivee: '08:15',
+            depart: { label: 'Ariana' },
+            destination: { label: 'ISET Nabeul' },
+            scoreMatch: 91,
+          },
+          {
+            _id: 'demo2',
+            conducteur: { nom: 'Linda M.', noteMoyenne: 4.5, nombreAvis: 8 },
+            prix: 15,
+            heureDepart: '07:55',
+            heureArrivee: '08:25',
+            depart: { label: 'Hammamet' },
+            destination: { label: 'ISET Nabeul' },
+            scoreMatch: 84,
+          },
+        ]}
+        keyExtractor={(item) => item._id}
+        renderItem={({ item }) => (
+          <SuggestionCard item={item} onSelectDetail={onSelectDetail} />
+        )}
+        ListHeaderComponent={headerComponent}
+        contentContainerStyle={s.listContent}
         refreshControl={
           <RefreshControl
             refreshing={rafraichir}
@@ -132,655 +272,407 @@ export default function HomeScreen({ navigation, onLogout }) {
             colors={[colors.primary]}
           />
         }
-      >
-        {/* Salutation & Match IA (Image 2 de la maquette - US11) */}
-        <View style={styles.greetingSection}>
-          <View style={styles.greetingTextContainer}>
-            <Text style={styles.greetingTitle}>Bonjour {prenom} !</Text>
-            <Text style={styles.greetingSubtitle}>Où vas-tu aujourd'hui ?</Text>
-          </View>
+      />
 
-          <TouchableOpacity
-            style={styles.badgeMatchIA}
-            onPress={() => {
-              if (suggestions.length > 0) {
-                navigation.navigate('MatchingDetail', { id: suggestions[0]._id });
-              } else {
-                navigation.navigate('SearchRide');
-              }
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.badgeMatchIAText}>91% Match IA 📊</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Barre de recherche rapide (Style Image 2 de la maquette) */}
-        <TouchableOpacity
-          style={styles.searchBarCard}
-          onPress={() => navigation.navigate('SearchRide')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.searchIcon}>🔍</Text>
-          <Text style={styles.searchPlaceholder} numberOfLines={1}>
-            Rechercher un trajet vers ISET...
-          </Text>
-          <View style={styles.searchButtonMini}>
-            <Text style={styles.searchButtonMiniText}>Chercher</Text>
-          </View>
+      {/* ─── Barre de Navigation Inférieure (Fidèle à la Maquette) ─── */}
+      <View style={s.bottomNav}>
+        <TouchableOpacity style={s.navItem} onPress={() => {}}>
+          <Text style={[s.navIcon, { color: colors.primary }]}>🏠</Text>
+          <Text style={[s.navLabel, { color: colors.primary }]}>Accueil</Text>
         </TouchableOpacity>
 
-        {/* Raccourcis Fonctionnalités / Sprint 3 */}
-        <View style={styles.quickGrid}>
-          <TouchableOpacity
-            style={[styles.quickCard, { backgroundColor: '#F0FDF4' }]}
-            onPress={() => navigation.navigate('SearchRide')}
-          >
-            <Text style={styles.quickCardIcon}>🔍</Text>
-            <Text style={styles.quickCardTitle}>Chercher</Text>
-            <Text style={styles.quickCardSub}>Trajet vers l'institut</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.quickCard, { backgroundColor: '#ECFDF5' }]}
-            onPress={() => navigation.navigate('MyBookings')}
-          >
-            <Text style={styles.quickCardIcon}>🎫</Text>
-            <Text style={styles.quickCardTitle}>Réservations</Text>
-            <Text style={styles.quickCardSub}>Mes places réservées</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.quickCard, { backgroundColor: '#F0F9FF' }]}
-            onPress={() => navigation.navigate('BookingRequests')}
-          >
-            <Text style={styles.quickCardIcon}>📬</Text>
-            <Text style={styles.quickCardTitle}>Demandes</Text>
-            <Text style={styles.quickCardSub}>Gérer les passagers</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.quickCard, { backgroundColor: '#FEF3C7' }]}
-            onPress={() => (user?.vehicule ? navigation.navigate('PublishRide') : navigation.navigate('Vehicle'))}
-          >
-            <Text style={styles.quickCardIcon}>🚗</Text>
-            <Text style={styles.quickCardTitle}>Publier</Text>
-            <Text style={styles.quickCardSub}>
-              {user?.vehicule ? 'Nouveau trajet' : 'Ajouter véhicule'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Suggestions Intelligentes (Image 1 et 2 de la maquette) */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>SUGGESTIONS</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('SearchRide')}>
-            <Text style={styles.sectionLink}>Voir tout</Text>
-          </TouchableOpacity>
-        </View>
-
-        {suggestions.length === 0 ? (
-          <View style={styles.noSuggestionsCard}>
-            <Text style={styles.noSuggestionsIcon}>🌱</Text>
-            <Text style={styles.noSuggestionsTitle}>Aucun trajet suggéré pour le moment</Text>
-            <Text style={styles.noSuggestionsSub}>
-              Soyez le premier à publier un trajet ou configurez votre emploi du temps pour recevoir des
-              suggestions automatiques !
-            </Text>
-          </View>
-        ) : (
-          suggestions.map((item) => {
-            const conducteur = item.conducteur;
-            return (
-              <TouchableOpacity
-                key={item._id}
-                style={styles.suggestionCard}
-                onPress={() => navigation.navigate('RideDetail', { id: item._id })}
-                activeOpacity={0.8}
-              >
-                <View style={styles.suggTopRow}>
-                  <View style={styles.suggDriverRow}>
-                    {conducteur?.photo ? (
-                      <Image source={{ uri: conducteur.photo }} style={styles.suggAvatar} />
-                    ) : (
-                      <View style={styles.suggAvatarPlaceholder}>
-                        <Text style={styles.suggAvatarText}>
-                          {conducteur?.nom ? conducteur.nom[0].toUpperCase() : 'C'}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.suggDriverName} numberOfLines={1}>
-                        {conducteur?.nom}
-                      </Text>
-                      <Text style={styles.suggDriverSub}>
-                        ⭐ {(conducteur?.noteMoyenne || 4.8).toFixed(1)} ·{' '}
-                        {conducteur?.filiere || 'ISET Nabeul'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.badgeMatchSmall}
-                    onPress={() => navigation.navigate('MatchingDetail', { id: item._id })}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.badgeMatchSmallText}>{item.scoreMatch || 91}% MATCH 📊</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.suggRouteRow}>
-                  <Text style={styles.suggRouteText} numberOfLines={1}>
-                    {item.depart.label?.split(',')[0]} → {item.destination.label?.split(',')[0]}
-                  </Text>
-                  <Text style={styles.suggPriceText}>{item.prix} DT</Text>
-                </View>
-
-                <View style={styles.suggBottomRow}>
-                  <Text style={styles.suggTimeText}>
-                    ⏰ Départ à {item.heureDepart}
-                  </Text>
-                  <Text style={styles.suggPlacesText}>
-                    {item.places} place(s) disponible(s)
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
-
-        {/* Emploi du temps & Profil Raccourcis */}
-        <View style={styles.extraSection}>
-          <TouchableOpacity
-            style={styles.bannerPlanning}
-            onPress={() => navigation.navigate('Schedule')}
-          >
-            <Text style={styles.bannerPlanningIcon}>📅</Text>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.bannerPlanningTitre}>Mon Emploi du Temps ISET</Text>
-              <Text style={styles.bannerPlanningDesc}>
-                Importez votre planning pour calculer automatiquement votre compatibilité covoiturage.
-              </Text>
-            </View>
-            <Text style={styles.arrowIcon}>→</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.bannerPlanning, { marginTop: 10, borderColor: '#A7F3D0', backgroundColor: '#F0FDF4' }]}
-            onPress={() => navigation.navigate('Stats')}
-          >
-            <Text style={styles.bannerPlanningIcon}>🏆</Text>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.bannerPlanningTitre, { color: colors.primaryDark }]}>Mes Statistiques & Badges (US16-17)</Text>
-              <Text style={styles.bannerPlanningDesc}>
-                Consultez vos économies en dinars, votre CO₂ évité et vos badges de valorisation.
-              </Text>
-            </View>
-            <Text style={styles.arrowIcon}>→</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {/* Barre de navigation inférieure UniRide (Image 2 de la maquette) */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity
-          style={styles.tabBarItem}
-          onPress={() => setOngletActif('accueil')}
-        >
-          <Text style={[styles.tabBarIcon, ongletActif === 'accueil' && styles.tabBarIconActif]}>
-            🏠
-          </Text>
-          <Text style={[styles.tabBarLabel, ongletActif === 'accueil' && styles.tabBarLabelActif]}>
-            ACCUEIL
-          </Text>
+        <TouchableOpacity style={s.navItem} onPress={() => navigation.navigate('SearchRide')}>
+          <Text style={s.navIcon}>🔍</Text>
+          <Text style={s.navLabel}>Recherche</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.tabBarItem}
-          onPress={() => navigation.navigate('MyRides')}
-        >
-          <Text style={styles.tabBarIcon}>🚗</Text>
-          <Text style={styles.tabBarLabel}>TRAJETS</Text>
+        <TouchableOpacity style={s.navItem} onPress={() => navigation.navigate('Schedule')}>
+          <Text style={s.navIcon}>📅</Text>
+          <Text style={s.navLabel}>Planning</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.tabBarItem}
-          onPress={() => navigation.navigate('Discussions')}
-        >
-          <Text style={styles.tabBarIcon}>💬</Text>
-          <Text style={styles.tabBarLabel}>CHAT</Text>
+        <TouchableOpacity style={s.navItem} onPress={() => navigation.navigate('Discussions')}>
+          <Text style={s.navIcon}>💬</Text>
+          <Text style={s.navLabel}>Messages</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.tabBarItem}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Text style={styles.tabBarIcon}>👤</Text>
-          <Text style={styles.tabBarLabel}>COMPTE</Text>
+        <TouchableOpacity style={s.navItem} onPress={() => navigation.navigate('Profile')}>
+          <Text style={s.navIcon}>👤</Text>
+          <Text style={s.navLabel}>Profil</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  loadingContainer: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
   },
-  headerBar: {
+  listContent: {
+    paddingBottom: 85,
+  },
+  header: {
+    backgroundColor: colors.primary,
+    paddingTop: Platform.OS === 'ios' ? 50 : 36,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  userProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: colors.accent,
+  },
+  headerAvatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerAvatarInitial: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.white,
+  },
+  headerBonjour: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  headerUserName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.white,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  notifBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notifIcon: {
+    fontSize: 18,
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+  },
+  publishRoundBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  publishRoundBtnText: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: colors.text,
+    lineHeight: 28,
+  },
+  headerQuestion: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.white,
+    marginTop: 18,
+    marginBottom: 16,
+  },
+  searchToggleBar: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: radius.md,
+    padding: 4,
+  },
+  searchYellowBtn: {
+    flex: 1,
+    backgroundColor: colors.accent,
+    paddingVertical: 12,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchYellowText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  publishToggleBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  publishToggleText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  statsCardsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginTop: 14,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    ...shadows.card,
+  },
+  statIconCircleBlue: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statIconCircleYellow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.accentLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statIcon: {
+    fontSize: 16,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.textMuted,
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: colors.text,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  logoGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  logoIcon: {
-    fontSize: 16,
-  },
-  logoText: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: colors.primaryDark,
-    letterSpacing: -0.5,
-  },
-  headerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  headerAvatarPlaceholder: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerNotifBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  headerNotifIcon: {
-    fontSize: 16,
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    backgroundColor: colors.danger,
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 3,
-  },
-  notifBadgeText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  headerLogoutBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.dangerLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  headerLogoutIcon: {
-    fontSize: 16,
-    color: colors.danger,
-    fontWeight: 'bold',
-  },
-  headerAvatarText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 90,
-  },
-  greetingSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 12,
-  },
-  greetingTextContainer: {
-    flex: 1,
-  },
-  greetingTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: colors.text,
-    letterSpacing: -0.5,
-  },
-  greetingSubtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  badgeMatchIA: {
-    backgroundColor: colors.badgeMatchBg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  badgeMatchIAText: {
-    color: colors.badgeMatchText,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  searchBarCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  searchButtonMini: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  searchButtonMiniText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  quickCard: {
-    width: '48%',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
-    ...shadows.card,
-  },
-  quickCardIcon: {
-    fontSize: 24,
-    marginBottom: 6,
-  },
-  quickCardTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  quickCardSub: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    marginTop: 22,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 18,
     fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
-  },
-  sectionLink: {
-    fontSize: 12,
-    fontWeight: '700',
     color: colors.primary,
   },
-  noSuggestionsCard: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  noSuggestionsIcon: {
-    fontSize: 36,
-    marginBottom: 10,
-  },
-  noSuggestionsTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-  },
-  noSuggestionsSub: {
+  voirToutText: {
     fontSize: 12,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 16,
+    fontWeight: '800',
+    color: colors.primary,
   },
-  suggestionCard: {
+  card: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     padding: 16,
+    marginHorizontal: 20,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.borderLight,
     ...shadows.card,
   },
-  suggTopRow: {
+  cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
-  suggDriverRow: {
+  driverRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    marginRight: 8,
   },
-  suggAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginRight: 10,
   },
-  suggAvatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  avatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
-  suggAvatarText: {
-    fontSize: 14,
+  avatarInitial: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: colors.primary,
   },
-  suggDriverName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  suggDriverSub: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  badgeMatchSmall: {
-    backgroundColor: colors.badgeGoldBg,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  badgeMatchSmallText: {
-    color: colors.badgeGoldText,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  suggRouteRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  suggRouteText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-    flex: 1,
-    marginRight: 8,
-  },
-  suggPriceText: {
+  driverName: {
     fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  driverRating: {
+    fontSize: 12,
+    color: colors.warning,
+    marginTop: 2,
+  },
+  priceBox: {
+    alignItems: 'flex-end',
+  },
+  priceAmount: {
+    fontSize: 17,
     fontWeight: '900',
     color: colors.primary,
   },
-  suggBottomRow: {
+  priceSub: {
+    fontSize: 10,
+    color: colors.textMuted,
+  },
+  routeBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.sm,
+    padding: 10,
+    marginBottom: 12,
+    gap: 4,
+  },
+  routeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dotBlue: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+    marginRight: 8,
+  },
+  dotGray: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.textLight,
+    marginRight: 8,
+  },
+  routeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  routeTextMuted: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  suggTimeText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  suggPlacesText: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  extraSection: {
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  bannerPlanning: {
+  tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    ...shadows.card,
+    gap: 6,
+    flexWrap: 'wrap',
+    flex: 1,
+    marginRight: 8,
   },
-  bannerPlanningIcon: {
-    fontSize: 28,
+  tagPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
   },
-  bannerPlanningTitre: {
-    fontSize: 14,
+  tagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  badgeMatch: {
+    backgroundColor: colors.badgeMatchBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+  },
+  badgeMatchText: {
+    fontSize: 10,
     fontWeight: '800',
-    color: colors.primaryDark,
+    color: colors.badgeMatchText,
   },
-  bannerPlanningDesc: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-    lineHeight: 15,
+  btnDetails: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.md,
   },
-  arrowIcon: {
-    fontSize: 18,
+  btnDetailsText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: colors.primary,
-    fontWeight: 'bold',
   },
-  bottomTabBar: {
+  bottomNav: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 65,
     backgroundColor: colors.card,
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
-    paddingBottom: 4,
-    ...shadows.capsule,
+    ...shadows.elevated,
   },
-  tabBarItem: {
+  navItem: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  tabBarIcon: {
+  navIcon: {
     fontSize: 18,
     color: colors.textMuted,
-    marginBottom: 2,
   },
-  tabBarIconActif: {
-    color: colors.primary,
-  },
-  tabBarLabel: {
-    fontSize: 10,
-    fontWeight: '700',
+  navLabel: {
+    fontSize: 11,
     color: colors.textMuted,
-    letterSpacing: 0.3,
-  },
-  tabBarLabelActif: {
-    color: colors.primary,
-    fontWeight: '900',
+    marginTop: 2,
+    fontWeight: '600',
   },
 });

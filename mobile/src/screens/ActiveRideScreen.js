@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import UniHeader from '../components/UniHeader';
 
 export default function ActiveRideScreen({ route, navigation }) {
@@ -38,7 +38,7 @@ export default function ActiveRideScreen({ route, navigation }) {
         });
       }
     } catch (err) {
-      Alert.alert('Erreur', 'Impossible de charger les données du trajet en cours');
+      Alert.alert('Erreur', 'Impossible de charger les donn\u00e9es du trajet en cours');
     } finally {
       setChargement(false);
     }
@@ -46,14 +46,14 @@ export default function ActiveRideScreen({ route, navigation }) {
 
   useEffect(() => {
     charger();
-    const interval = setInterval(charger, 15000); // Polling toutes les 15s pour le suivi en direct
+    const interval = setInterval(charger, 15000);
     return () => clearInterval(interval);
   }, [charger]);
 
-  const terminerTrajet = () => {
+  const terminerTrajet = useCallback(() => {
     Alert.alert(
       'Terminer le trajet',
-      'Confirmez-vous que vous êtes bien arrivé à l’ISET Nabeul et que tous les passagers ont été déposés ?',
+      'Confirmez-vous que vous \u00eates bien arriv\u00e9 \u00e0 l\u2019ISET Nabeul et que tous les passagers ont \u00e9t\u00e9 d\u00e9pos\u00e9s ?',
       [
         { text: 'Non, continuer', style: 'cancel' },
         {
@@ -74,16 +74,19 @@ export default function ActiveRideScreen({ route, navigation }) {
         },
       ]
     );
-  };
+  }, [id]);
 
-  const signalerSouci = () => {
+  const signalerSouci = useCallback(() => {
+    const estConducteur = data?.estConducteur;
+    const passagers = data?.passagers || [];
     const cible = estConducteur && passagers.length > 0 ? passagers[0] : data?.ride?.conducteur;
+
     Alert.alert(
       'Signaler un souci',
-      'Quel imprévu rencontrez-vous ?',
+      'Quel impr\u00e9vu rencontrez-vous ?',
       [
         {
-          text: 'Signaler un comportement 🛡️',
+          text: 'Signaler un comportement',
           onPress: () => {
             navigation.navigate('Report', {
               utilisateurSignaleId: cible?._id,
@@ -93,13 +96,13 @@ export default function ActiveRideScreen({ route, navigation }) {
           },
         },
         {
-          text: 'Trafic / Ralentissement 🚦',
+          text: 'Trafic / Ralentissement',
           onPress: () => Alert.alert('Information', 'Notification de retard transmise aux passagers.'),
         },
         { text: 'Annuler', style: 'cancel' },
       ]
     );
-  };
+  }, [data, navigation]);
 
   if (chargement) {
     return (
@@ -113,7 +116,7 @@ export default function ActiveRideScreen({ route, navigation }) {
   if (!data || !data.ride) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.erreurTexte}>Trajet introuvable ou déjà clôturé.</Text>
+        <Text style={styles.erreurTexte}>Trajet introuvable ou d\u00e9j\u00e0 cl\u00f4tur\u00e9.</Text>
         <TouchableOpacity style={styles.boutonRetour} onPress={() => navigation.goBack()}>
           <Text style={styles.boutonRetourTexte}>Retour</Text>
         </TouchableOpacity>
@@ -121,14 +124,12 @@ export default function ActiveRideScreen({ route, navigation }) {
     );
   }
 
-  const { ride, estConducteur, passagers, gainsEstimes, co2EviteKg } = data;
+  const { ride, estConducteur, passagers = [], gainsEstimes = 0, co2EviteKg = 0 } = data;
   const points = (ride.itineraire || []).map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
   const [lngD, latD] = ride.depart.location.coordinates;
   const [lngA, latA] = ride.destination.location.coordinates;
-  const departCoord = { latitude: latD, longitude: lngD };
   const arriveeCoord = { latitude: latA, longitude: lngA };
 
-  // Position intermédiaire indicative du véhicule
   const posVoiture =
     points.length > 5
       ? points[Math.floor(points.length * 0.6)]
@@ -137,16 +138,16 @@ export default function ActiveRideScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       <UniHeader
-        title={estConducteur ? 'Trajet en cours (Conducteur)' : 'Suivi de trajet (Passager)'}
+        title={estConducteur ? 'Trajet en cours' : 'Suivi de trajet'}
         subtitle={ride.destination?.label?.split(',')[0]}
         navigation={navigation}
         showBack={true}
       />
 
-      {/* Capsule d'état "EN ROUTE" (Fidèle à l'image 3 de la maquette) */}
+      {/* Capsule d'\u00e9tat "EN ROUTE" (Fid\u00e8le \u00e0 l'image 3 de la maquette) */}
       <View style={styles.enRouteBar}>
         <View style={styles.enRoutePill}>
-          <Text style={styles.enRouteDot}>🟢</Text>
+          <View style={styles.enRouteDot} />
           <Text style={styles.enRouteLabel}>EN ROUTE</Text>
         </View>
 
@@ -160,7 +161,7 @@ export default function ActiveRideScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* Carte avec trajet et véhicule en déplacement */}
+      {/* Carte avec trajet et v\u00e9hicule */}
       <View style={styles.mapContainer}>
         <MapView
           ref={mapRef}
@@ -174,28 +175,27 @@ export default function ActiveRideScreen({ route, navigation }) {
             tileSize={256}
           />
           {points.length > 0 && (
-            <Polyline coordinates={points} strokeWidth={5} strokeColor={colors.primary} />
+            <Polyline coordinates={points} strokeWidth={4} strokeColor={colors.primary} />
           )}
 
-          {/* Marqueur Véhicule */}
-          <Marker coordinate={posVoiture} title="Véhicule UniRide" description="En route vers l'ISET">
+          <Marker coordinate={posVoiture} title="V\u00e9hicule UniRide">
             <View style={styles.carMarker}>
-              <Text style={{ fontSize: 20 }}>🚗</Text>
+              <View style={styles.carDot} />
             </View>
           </Marker>
 
-          <Marker coordinate={arriveeCoord} title="Arrivée" description={ride.destination?.label} pinColor="red" />
+          <Marker coordinate={arriveeCoord} title="Arriv\u00e9e" description={ride.destination?.label} pinColor="red" />
         </MapView>
       </View>
 
-      {/* Panneau inférieur "Vos passagers" (Fidèle à l'image 3) */}
+      {/* Panneau inf\u00e9rieur "Vos passagers" (Fid\u00e8le \u00e0 l'image 3) */}
       <ScrollView contentContainerStyle={styles.bottomCard} showsVerticalScrollIndicator={false}>
         <View style={styles.passagersHeaderRow}>
           <Text style={styles.passagersTitre}>
-            {estConducteur ? 'Vos passagers' : 'Covoitureurs à bord'}
+            {estConducteur ? 'Vos passagers' : 'Covoitureurs \u00e0 bord'}
           </Text>
           <View style={styles.presentsBadge}>
-            <Text style={styles.presentsBadgeText}>{passagers.length} Présent(s)</Text>
+            <Text style={styles.presentsBadgeText}>{passagers.length} Pr\u00e9sent(s)</Text>
           </View>
         </View>
 
@@ -203,7 +203,7 @@ export default function ActiveRideScreen({ route, navigation }) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.passagersScroll}>
           {passagers.length === 0 ? (
             <Text style={{ color: colors.textMuted, fontStyle: 'italic', marginVertical: 10 }}>
-              Aucun passager confirmé sur ce trajet.
+              Aucun passager confirm\u00e9 sur ce trajet.
             </Text>
           ) : (
             passagers.map((p) => (
@@ -226,23 +226,23 @@ export default function ActiveRideScreen({ route, navigation }) {
           )}
         </ScrollView>
 
-        {/* Détails écologiques et financiers */}
+        {/* D\u00e9tails \u00e9cologiques et financiers */}
         <View style={styles.statsCard}>
           <View style={styles.statCol}>
-            <Text style={styles.statLabel}>GAINS POTENTIELS</Text>
+            <Text style={styles.statLabel}>GAINS ESTIM\u00c9S</Text>
             <Text style={styles.statVal}>{gainsEstimes.toFixed(1)} DT</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statCol}>
-            <Text style={styles.statLabel}>CO₂ ÉVITÉ</Text>
+            <Text style={styles.statLabel}>CO\u2082 \u00c9VIT\u00c9</Text>
             <Text style={styles.statVal}>{co2EviteKg} kg</Text>
           </View>
         </View>
 
-        {/* Boutons d'action (Conducteur vs Passager) */}
+        {/* Boutons d'action */}
         {estConducteur ? (
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.boutonSignaler} onPress={signalerSouci}>
+            <TouchableOpacity style={styles.boutonSignaler} onPress={signalerSouci} activeOpacity={0.7}>
               <Text style={styles.boutonSignalerTexte}>Signaler un souci</Text>
             </TouchableOpacity>
 
@@ -260,40 +260,40 @@ export default function ActiveRideScreen({ route, navigation }) {
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity style={styles.boutonSignalerLarge} onPress={signalerSouci}>
-            <Text style={styles.boutonSignalerTexte}>Signaler un problème au conducteur</Text>
+          <TouchableOpacity style={styles.boutonSignalerLarge} onPress={signalerSouci} activeOpacity={0.7}>
+            <Text style={styles.boutonSignalerTexte}>Signaler un probl\u00e8me au conducteur</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
 
-      {/* Modal / Vue "Trajet Terminé !" (Fidèle à l'image 3 de la maquette) */}
+      {/* Modal / Vue "Trajet Termin\u00e9 !" (Fid\u00e8le \u00e0 l'image 3) */}
       <Modal visible={modalTermine} animationType="slide" transparent={false}>
         <View style={styles.termineContainer}>
           <View style={styles.checkIconBig}>
-            <Text style={styles.checkSymbol}>✓</Text>
+            <Text style={styles.checkSymbol}>{'\u2713'}</Text>
           </View>
 
-          <Text style={styles.termineTitre}>Trajet Terminé !</Text>
+          <Text style={styles.termineTitre}>Trajet Termin\u00e9 !</Text>
           <Text style={styles.termineSousTitre}>
-            Merci d'avoir utilisé UniRide pour un campus plus vert.
+            Merci d'avoir utilis\u00e9 UniRide pour un campus plus vert.
           </Text>
 
           <View style={styles.recapCard}>
-            <Text style={styles.recapCardTitre}>RÉCAPITULATIF DU TRAJET</Text>
+            <Text style={styles.recapCardTitre}>R\u00c9CAPITULATIF DU TRAJET</Text>
 
             <View style={styles.recapItem}>
-              <Text style={styles.recapLabel}>Passagers transportés :</Text>
-              <Text style={styles.recapValue}>{recap?.passagersTransportes || passagers.length} étudiant(s)</Text>
+              <Text style={styles.recapLabel}>Passagers transport\u00e9s :</Text>
+              <Text style={styles.recapValue}>{recap?.passagersTransportes || passagers.length} \u00e9tudiant(s)</Text>
             </View>
 
             <View style={styles.recapItem}>
-              <Text style={styles.recapLabel}>Gains réalisés :</Text>
+              <Text style={styles.recapLabel}>Gains r\u00e9alis\u00e9s :</Text>
               <Text style={styles.recapValue}>{recap?.gainsRealises || gainsEstimes} DT</Text>
             </View>
 
             <View style={styles.recapItem}>
-              <Text style={styles.recapLabel}>Empreinte CO₂ évitée :</Text>
-              <Text style={styles.recapValue}>{recap?.co2EviteKg || co2EviteKg} kg CO₂</Text>
+              <Text style={styles.recapLabel}>Empreinte CO\u2082 \u00e9vit\u00e9e :</Text>
+              <Text style={styles.recapValue}>{recap?.co2EviteKg || co2EviteKg} kg CO\u2082</Text>
             </View>
 
             <View style={styles.recapItem}>
@@ -317,7 +317,7 @@ export default function ActiveRideScreen({ route, navigation }) {
             }}
             activeOpacity={0.85}
           >
-            <Text style={styles.boutonNoterActionTexte}>⭐ Noter l'expérience & Badges</Text>
+            <Text style={styles.boutonNoterActionTexte}>Noter l'exp\u00e9rience</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -328,7 +328,7 @@ export default function ActiveRideScreen({ route, navigation }) {
             }}
             activeOpacity={0.85}
           >
-            <Text style={styles.boutonRetourAccueilTexte}>Retour à l'accueil</Text>
+            <Text style={styles.boutonRetourAccueilTexte}>Retour \u00e0 l'accueil</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   boutonRetour: {
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 20,
+    borderRadius: radius.full,
     backgroundColor: colors.primary,
   },
   boutonRetourTexte: {
@@ -379,9 +379,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 8,
     padding: 12,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#BFDBFE',
     ...shadows.card,
   },
   enRoutePill: {
@@ -389,12 +389,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.primaryLight,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 5,
+    borderRadius: radius.sm,
   },
   enRouteDot: {
-    fontSize: 10,
-    marginRight: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+    marginRight: 6,
   },
   enRouteLabel: {
     fontSize: 11,
@@ -422,9 +425,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   mapContainer: {
-    height: 250,
+    height: 240,
     marginHorizontal: 16,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.borderLight,
@@ -434,15 +437,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   carMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.white,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderWidth: 3,
+    borderColor: colors.white,
     ...shadows.card,
+  },
+  carDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.white,
   },
   bottomCard: {
     padding: 16,
@@ -463,7 +472,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: radius.sm,
   },
   presentsBadgeText: {
     color: colors.primaryDark,
@@ -479,26 +488,26 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   passagerAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     borderWidth: 2,
     borderColor: colors.primary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   passagerAvatarPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: colors.primary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   passagerAvatarText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.primary,
   },
@@ -510,16 +519,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   badgePresentDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.primary,
     marginTop: 2,
   },
   statsCard: {
     flexDirection: 'row',
     backgroundColor: colors.card,
-    borderRadius: 18,
+    borderRadius: radius.md,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
@@ -550,16 +559,16 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
   boutonSignaler: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 20,
-    backgroundColor: colors.background,
+    borderRadius: radius.full,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
-    marginRight: 10,
   },
   boutonSignalerTexte: {
     color: colors.textMuted,
@@ -569,10 +578,10 @@ const styles = StyleSheet.create({
   boutonTerminer: {
     flex: 2,
     paddingVertical: 14,
-    borderRadius: 20,
+    borderRadius: radius.full,
     backgroundColor: colors.primary,
     alignItems: 'center',
-    ...shadows.card,
+    ...shadows.elevated,
   },
   boutonTerminerTexte: {
     color: colors.white,
@@ -581,8 +590,8 @@ const styles = StyleSheet.create({
   },
   boutonSignalerLarge: {
     paddingVertical: 14,
-    borderRadius: 20,
-    backgroundColor: colors.background,
+    borderRadius: radius.full,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -595,17 +604,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkIconBig: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    ...shadows.card,
+    ...shadows.elevated,
   },
   checkSymbol: {
-    fontSize: 44,
+    fontSize: 40,
     color: colors.white,
     fontWeight: '900',
   },
@@ -624,7 +633,7 @@ const styles = StyleSheet.create({
   recapCard: {
     width: '100%',
     backgroundColor: colors.card,
-    borderRadius: 24,
+    borderRadius: radius.lg,
     padding: 20,
     marginBottom: 24,
     borderWidth: 1,
@@ -632,7 +641,7 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   recapCardTitre: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: colors.primaryDark,
     letterSpacing: 0.8,
@@ -656,9 +665,9 @@ const styles = StyleSheet.create({
   },
   boutonNoterAction: {
     width: '100%',
-    backgroundColor: '#F59E0B',
-    paddingVertical: 16,
-    borderRadius: 25,
+    backgroundColor: colors.primary,
+    paddingVertical: 15,
+    borderRadius: radius.full,
     alignItems: 'center',
     marginBottom: 12,
     ...shadows.elevated,
@@ -671,16 +680,15 @@ const styles = StyleSheet.create({
   boutonRetourAccueil: {
     width: '100%',
     backgroundColor: colors.card,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    borderColor: colors.border,
     paddingVertical: 14,
-    borderRadius: 25,
+    borderRadius: radius.full,
     alignItems: 'center',
   },
   boutonRetourAccueilTexte: {
     color: colors.textSecondary,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
 });
-

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,104 +6,119 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
-import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen({ navigation, onLogin }) {
+  const { connecter } = useAuth();
   const [email, setEmail] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
   const [erreur, setErreur] = useState('');
-  const [envoi, setEnvoi] = useState(false);
+  const [chargement, setChargement] = useState(false);
 
-  const seConnecter = async () => {
+  const seConnecter = useCallback(async () => {
     setErreur('');
     if (!email.trim() || !motDePasse) {
-      setErreur('Veuillez remplir tous les champs');
+      setErreur('Veuillez renseigner votre e-mail et votre mot de passe.');
       return;
     }
-    setEnvoi(true);
+
+    setChargement(true);
     try {
-      const { data } = await api.post('/auth/login', {
-        email: email.trim().toLowerCase(),
-        motDePasse,
-      });
-      await onLogin(data.token);
+      if (onLogin) {
+        await onLogin(email.trim().toLowerCase(), motDePasse);
+      } else if (connecter) {
+        await connecter(email.trim().toLowerCase(), motDePasse);
+      }
     } catch (err) {
-      setErreur(err.response?.data?.message || 'Identifiants invalides ou serveur indisponible');
-      setEnvoi(false);
+      setErreur(
+        err.response?.data?.message ||
+        'Identifiants incorrects ou problème de connexion.'
+      );
+    } finally {
+      setChargement(false);
     }
-  };
+  }, [email, motDePasse, onLogin, connecter]);
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        {/* Entête Vert avec Logo UniRide (Fidèle à l'image 2 de la maquette) */}
-        <View style={styles.topBanner}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoBadgeIcon}>🚗🍃</Text>
+        {/* ─── Bannière Haute Bleu Royal ─── */}
+        <View style={styles.topSection}>
+          <View style={styles.logoCircle}>
+            <Text style={styles.logoCar}>🚗</Text>
           </View>
           <Text style={styles.brandTitle}>UniRide</Text>
-          <Text style={styles.brandSubtitle}>ISET Nabeul · Éco-Covoiturage</Text>
+          <Text style={styles.brandSub}>Plateforme ISET Nabeul</Text>
         </View>
 
-        {/* Carte de Connexion Flottante */}
+        {/* ─── Carte Flottante Blanche ─── */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Connexion</Text>
 
           {erreur ? <Text style={styles.erreur}>{erreur}</Text> : null}
 
-          <Text style={styles.label}>E-MAIL UNIVERSITAIRE</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="nom.prenom@isetn.tn"
-            placeholderTextColor={colors.textLight}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+          {/* Email */}
+          <Text style={styles.inputLabel}>EMAIL UNIVERSITAIRE</Text>
+          <View style={styles.inputRow}>
+            <Text style={styles.inputIconText}>✉</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="votre.email@isetn.tn"
+              placeholderTextColor={colors.textLight}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
 
-          <View style={styles.rowBetween}>
-            <Text style={styles.label}>MOT DE PASSE</Text>
-            <TouchableOpacity onPress={() => alert('Veuillez contacter le support ISET')}>
-              <Text style={styles.motDePasseOublie}>OUBLIÉ ?</Text>
+          {/* Mot de passe */}
+          <View style={styles.pwdHeaderRow}>
+            <Text style={styles.inputLabel}>MOT DE PASSE</Text>
+            <TouchableOpacity onPress={() => alert('Veuillez contacter le support ISET.')}>
+              <Text style={styles.forgotLink}>Oublié ?</Text>
             </TouchableOpacity>
           </View>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor={colors.textLight}
-            value={motDePasse}
-            onChangeText={setMotDePasse}
-            secureTextEntry
-          />
+          <View style={styles.inputRow}>
+            <Text style={styles.inputIconText}>🔒</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="••••••••"
+              placeholderTextColor={colors.textLight}
+              value={motDePasse}
+              onChangeText={setMotDePasse}
+              secureTextEntry
+            />
+          </View>
 
+          {/* Bouton Connexion Bleu */}
           <TouchableOpacity
-            style={styles.bouton}
+            style={styles.btnPrimary}
             onPress={seConnecter}
-            disabled={envoi}
+            disabled={chargement}
             activeOpacity={0.85}
           >
-            {envoi ? (
+            {chargement ? (
               <ActivityIndicator color={colors.white} />
             ) : (
-              <Text style={styles.boutonTexte}>Se connecter</Text>
+              <Text style={styles.btnPrimaryText}>Se connecter</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* Lien Inscription */}
-        <View style={styles.footerLinkRow}>
-          <Text style={styles.footerTexte}>Pas encore de compte ? </Text>
+        {/* ─── Pied de page ─── */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Pas encore de compte ?</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.footerLien}>Inscrivez-vous ici</Text>
+            <Text style={styles.registerLink}>Inscrivez-vous maintenant</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -116,26 +131,26 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: colors.background,
   },
-  topBanner: {
+  topSection: {
     backgroundColor: colors.primary,
-    paddingTop: 50,
+    paddingTop: Platform.OS === 'ios' ? 60 : 45,
     paddingBottom: 40,
     alignItems: 'center',
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
   },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: colors.white,
+  logoCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    ...shadows.card,
+    marginBottom: 10,
+    ...shadows.elevated,
   },
-  logoBadgeIcon: {
-    fontSize: 28,
+  logoCar: {
+    fontSize: 32,
   },
   brandTitle: {
     fontSize: 28,
@@ -143,94 +158,97 @@ const styles = StyleSheet.create({
     color: colors.white,
     letterSpacing: -0.5,
   },
-  brandSubtitle: {
+  brandSub: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '600',
-    marginTop: 4,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '500',
+    marginTop: 2,
   },
   card: {
     backgroundColor: colors.card,
+    borderRadius: 24,
     marginHorizontal: 20,
     marginTop: -20,
-    borderRadius: 24,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    padding: 24,
+    ...shadows.elevated,
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: colors.text,
     marginBottom: 18,
   },
-  label: {
+  inputLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.textMuted,
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
     marginBottom: 6,
   },
-  rowBetween: {
+  inputRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    marginBottom: 16,
   },
-  motDePasseOublie: {
-    fontSize: 11,
-    color: colors.primary,
-    fontWeight: '700',
-    marginBottom: 6,
+  inputIconText: {
+    fontSize: 16,
+    color: colors.textMuted,
+    marginRight: 10,
   },
   input: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    flex: 1,
     paddingVertical: 13,
     fontSize: 15,
     color: colors.text,
-    marginBottom: 16,
   },
-  bouton: {
+  pwdHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  forgotLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  btnPrimary: {
     backgroundColor: colors.primary,
-    paddingVertical: 15,
-    borderRadius: 25,
+    paddingVertical: 16,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
     ...shadows.card,
   },
-  boutonTexte: {
+  btnPrimaryText: {
     color: colors.white,
     fontWeight: '800',
     fontSize: 16,
-    letterSpacing: 0.3,
   },
   erreur: {
     color: colors.danger,
     backgroundColor: colors.dangerLight,
-    padding: 10,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: radius.md,
     marginBottom: 14,
     textAlign: 'center',
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  footerLinkRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  footer: {
     alignItems: 'center',
-    marginTop: 30,
-    paddingBottom: 20,
+    paddingVertical: 28,
   },
-  footerTexte: {
+  footerText: {
     fontSize: 14,
     color: colors.textMuted,
+    marginBottom: 4,
   },
-  footerLien: {
+  registerLink: {
     fontSize: 14,
     fontWeight: '800',
     color: colors.primary,

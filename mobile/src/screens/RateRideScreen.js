@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 
 export default function RateRideScreen({ route, navigation }) {
   const {
@@ -24,51 +25,47 @@ export default function RateRideScreen({ route, navigation }) {
 
   const [note, setNote] = useState(5);
   const [commentaire, setCommentaire] = useState('');
-  const [badgesSelectionnes, setBadgesSelectionnes] = useState(['Ponctuel ⏰', 'Sympathique 😊']);
+  const [badgesSelectionnes, setBadgesSelectionnes] = useState(['Ponctuel', 'Sympathique']);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
 
-  const prenom = cibleNom ? cibleNom.split(' ')[0] : 'votre covoitureur';
+  const badgesDisponibles =
+    roleCible === 'conducteur'
+      ? [
+          { id: 'Ponctuel', label: '⏱️ Ponctuel' },
+          { id: 'Conduite Souple', label: '🚗 Conduite souple' },
+          { id: 'Sympathique', label: '😊 Sympathique' },
+          { id: 'Éco-Conducteur', label: '🌿 Éco-conducteur' },
+        ]
+      : [
+          { id: 'Ponctuel', label: '⏱️ Ponctuel' },
+          { id: 'Sympathique', label: '😊 Sympathique' },
+          { id: 'Respectueux', label: '🤝 Respectueux' },
+        ];
 
-  // Badges disponibles selon le rôle
-  const badgesDisponibles = roleCible === 'conducteur'
-    ? [
-        { id: 'Ponctuel ⏰', label: 'Ponctuel ⏰' },
-        { id: 'Conduite Souple 🚗', label: 'Conduite Souple 🚗' },
-        { id: 'Sympathique 😊', label: 'Sympathique 😊' },
-        { id: 'Éco-Conducteur 🌱', label: 'Éco-Conducteur 🌱' },
-      ]
-    : [
-        { id: 'Ponctuel ⏰', label: 'Ponctuel ⏰' },
-        { id: 'Sympathique 😊', label: 'Sympathique 😊' },
-        { id: 'Respectueux 🤝', label: 'Respectueux 🤝' },
-      ];
-
-  const basculerBadge = (badgeId) => {
-    if (badgesSelectionnes.includes(badgeId)) {
-      setBadgesSelectionnes(badgesSelectionnes.filter((b) => b !== badgeId));
-    } else {
-      setBadgesSelectionnes([...badgesSelectionnes, badgeId]);
-    }
-  };
+  const basculerBadge = useCallback((badgeId) => {
+    setBadgesSelectionnes((prev) =>
+      prev.includes(badgeId) ? prev.filter((b) => b !== badgeId) : [...prev, badgeId]
+    );
+  }, []);
 
   const getEtoileLabel = (val) => {
     switch (val) {
       case 5:
-        return 'Excellent ! 🌟';
+        return '⭐ Expérience Excellente !';
       case 4:
-        return 'Très bien 👍';
+        return '👍 Très bien';
       case 3:
-        return 'Correct 🙂';
+        return '👌 Correct';
       case 2:
-        return 'Décevant 😐';
+        return '😕 Décevant';
       case 1:
-        return 'Mauvaise expérience ⚠️';
+        return '❌ Mauvaise expérience';
       default:
         return '';
     }
   };
 
-  const envoyerAvis = async () => {
+  const envoyerAvis = useCallback(async () => {
     if (!cibleId || !trajetId) {
       Alert.alert('Erreur', 'Données de trajet manquantes');
       navigation.navigate('Home');
@@ -87,12 +84,11 @@ export default function RateRideScreen({ route, navigation }) {
       });
 
       Alert.alert(
-        'Merci pour votre avis ! 🎉',
+        'Merci pour votre avis !',
         'Votre évaluation aide à renforcer la confiance et la qualité du covoiturage à l’ISET Nabeul.',
-        [{ text: 'Super !', onPress: () => navigation.navigate('Home') }]
+        [{ text: 'Continuer', onPress: () => navigation.navigate('Home') }]
       );
     } catch (err) {
-      console.log('Erreur envoi review :', err);
       const msg = err.response?.data?.message || "Impossible d'enregistrer votre avis";
       Alert.alert('Information', msg, [
         { text: 'OK', onPress: () => navigation.navigate('Home') },
@@ -100,340 +96,296 @@ export default function RateRideScreen({ route, navigation }) {
     } finally {
       setEnvoiEnCours(false);
     }
-  };
+  }, [cibleId, trajetId, note, commentaire, badgesSelectionnes, roleCible, navigation]);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      {/* Grand symbole de succès au sommet (Fidèle à la Maquette Image 3) */}
-      <View style={styles.iconeSuccesConteneur}>
-        <View style={styles.iconeSuccesCercle}>
-          <Text style={styles.iconeSuccesCheck}>✓</Text>
-          <View style={styles.pastilleFeuille}>
-            <Text style={styles.iconeFeuille}>🍃</Text>
-          </View>
+    <ScrollView style={s.container} contentContainerStyle={s.scrollContent}>
+      {/* ─── Header Célébration (Page 13 PDF) ─── */}
+      <View style={s.celebrationHeader}>
+        <View style={s.checkCircle}>
+          <Text style={s.checkIcon}>✓</Text>
         </View>
+        <Text style={s.celebrationTitle}>Trajet Terminé !</Text>
+        <Text style={s.celebrationSub}>
+          Merci d'avoir voyagé avec UniRide. Partagez votre expérience avec vos camarades.
+        </Text>
       </View>
 
-      <Text style={styles.titrePrincipal}>Trajet Terminé</Text>
-      <Text style={styles.sousTitre}>
-        Merci d’avoir utilisé UniRide. Prenez un moment pour noter votre expérience.
-      </Text>
-
-      {/* Carte Utilisateur à Noter */}
-      <View style={styles.cardAvis}>
-        <View style={styles.avatarWrapper}>
+      {/* ─── Carte d'évaluation ─── */}
+      <View style={s.card}>
+        <View style={s.avatarContainer}>
           {ciblePhoto ? (
-            <Image source={{ uri: ciblePhoto }} style={styles.avatar} />
+            <Image source={{ uri: ciblePhoto }} style={s.avatar} />
           ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarInitial}>
+            <View style={s.avatarPlaceholder}>
+              <Text style={s.avatarInitial}>
                 {cibleNom ? cibleNom[0].toUpperCase() : 'U'}
               </Text>
             </View>
           )}
         </View>
 
-        <Text style={styles.nomCible}>{cibleNom}</Text>
-        <Text style={styles.roleCibleBadge}>
-          {roleCible.toUpperCase()}
-        </Text>
+        <Text style={s.targetName}>{cibleNom}</Text>
+        <View style={s.roleBadge}>
+          <Text style={s.roleBadgeText}>{roleCible.toUpperCase()}</Text>
+        </View>
 
         {/* Étoiles interactives */}
-        <View style={styles.etoilesLigne}>
+        <View style={s.starsRow}>
           {[1, 2, 3, 4, 5].map((val) => (
             <TouchableOpacity
               key={val}
               onPress={() => setNote(val)}
               activeOpacity={0.7}
-              style={styles.etoileBouton}
+              style={s.starBtn}
             >
-              <Text style={[styles.etoileIcone, val <= note ? styles.etoilePleine : styles.etoileVide]}>
+              <Text style={[s.starIcon, val <= note ? s.starActive : s.starInactive]}>
                 ★
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.etoileLabel}>{getEtoileLabel(note)}</Text>
+        <Text style={s.scoreLabel}>{getEtoileLabel(note)}</Text>
 
-        {/* Commentaire optionnel */}
-        <View style={styles.commentaireSection}>
-          <Text style={styles.champLabel}>VOTRE COMMENTAIRE (OPTIONNEL)</Text>
-          <TextInput
-            style={styles.commentaireInput}
-            placeholder="Partagez votre expérience sur ce trajet..."
-            placeholderTextColor={colors.textLight}
-            value={commentaire}
-            onChangeText={setCommentaire}
-            multiline
-            numberOfLines={4}
-          />
-        </View>
-      </View>
-
-      {/* Badges à attribuer */}
-      <View style={styles.sectionBadges}>
-        <Text style={styles.titreBadges}>
-          BADGES POUR {prenom.toUpperCase()}
-        </Text>
-        <View style={styles.badgesGrille}>
-          {badgesDisponibles.map((b) => {
-            const actif = badgesSelectionnes.includes(b.id);
+        {/* Badges de compliment */}
+        <Text style={s.badgesSectionTitle}>Qu'avez-vous particulièrement apprécié ?</Text>
+        <View style={s.badgesRow}>
+          {badgesDisponibles.map((badge) => {
+            const isSelected = badgesSelectionnes.includes(badge.id);
             return (
               <TouchableOpacity
-                key={b.id}
-                style={[styles.badgePill, actif && styles.badgePillActif]}
-                onPress={() => basculerBadge(b.id)}
+                key={badge.id}
+                style={[s.badgeChip, isSelected && s.badgeChipActive]}
+                onPress={() => basculerBadge(badge.id)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.badgePillTexte, actif && styles.badgePillTexteActif]}>
-                  {b.label}
+                <Text style={[s.badgeChipText, isSelected && s.badgeChipTextActive]}>
+                  {badge.label}
                 </Text>
               </TouchableOpacity>
             );
           })}
         </View>
+
+        {/* Commentaire optionnel */}
+        <TextInput
+          style={s.commentInput}
+          placeholder="Un mot pour remercier ou donner un conseil... (optionnel)"
+          placeholderTextColor="#94A3B8"
+          value={commentaire}
+          onChangeText={setCommentaire}
+          multiline
+          numberOfLines={3}
+        />
       </View>
 
-      {/* Bouton d'action principal */}
+      {/* ─── Boutons d'action ─── */}
       <TouchableOpacity
-        style={styles.boutonEnvoyer}
+        style={s.submitBtn}
         onPress={envoyerAvis}
         disabled={envoiEnCours}
         activeOpacity={0.85}
       >
         {envoiEnCours ? (
-          <ActivityIndicator size="small" color={colors.white} />
+          <ActivityIndicator color="#FFF" />
         ) : (
-          <Text style={styles.boutonEnvoyerTexte}>Envoyer l'avis</Text>
+          <Text style={s.submitBtnText}>Valider mon évaluation</Text>
         )}
       </TouchableOpacity>
 
-      {/* Passer cette étape */}
       <TouchableOpacity
-        style={styles.boutonPasser}
+        style={s.skipBtn}
         onPress={() => navigation.navigate('Home')}
+        activeOpacity={0.7}
       >
-        <Text style={styles.boutonPasserTexte}>Passer cette étape</Text>
+        <Text style={s.skipBtnText}>Passer et retourner à l'accueil</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 50,
+    padding: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 36,
     paddingBottom: 40,
-    alignItems: 'center',
   },
-  iconeSuccesConteneur: {
+  celebrationHeader: {
+    alignItems: 'center',
     marginBottom: 20,
-    position: 'relative',
   },
-  iconeSuccesCercle: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
+  checkCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.accent,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
     ...shadows.elevated,
   },
-  iconeSuccesCheck: {
-    fontSize: 44,
-    color: colors.white,
-    fontWeight: 'bold',
-  },
-  pastilleFeuille: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#ECFDF5',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.card,
-  },
-  iconeFeuille: {
-    fontSize: 14,
-  },
-  titrePrincipal: {
-    fontSize: 26,
+  checkIcon: {
+    color: colors.navy,
+    fontSize: 32,
     fontWeight: '900',
-    color: colors.text,
-    marginBottom: 8,
-    textAlign: 'center',
   },
-  sousTitre: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-    paddingHorizontal: 15,
+  celebrationTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
   },
-  cardAvis: {
-    width: '100%',
-    backgroundColor: colors.card,
+  celebrationSub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 20,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 22,
     alignItems: 'center',
     marginBottom: 20,
-    ...shadows.elevated,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
   },
-  avatarWrapper: {
+  avatarContainer: {
     marginBottom: 10,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 3,
-    borderColor: '#86EFAC',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2.5,
+    borderColor: colors.accent,
   },
   avatarPlaceholder: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary,
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#86EFAC',
+    justifyContent: 'center',
   },
   avatarInitial: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.primary,
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
   },
-  nomCible: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
+  targetName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  roleCibleBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-    color: colors.textLight,
+  roleBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 4,
     marginBottom: 16,
   },
-  etoilesLigne: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  etoileBouton: {
-    padding: 6,
-  },
-  etoileIcone: {
-    fontSize: 34,
-  },
-  etoilePleine: {
-    color: '#FBBF24',
-  },
-  etoileVide: {
-    color: '#E2E8F0',
-  },
-  etoileLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primaryDark,
-    marginBottom: 18,
-  },
-  commentaireSection: {
-    width: '100%',
-  },
-  champLabel: {
+  roleBadgeText: {
+    color: colors.primary,
     fontSize: 11,
-    fontWeight: '700',
-    color: colors.textLight,
-    letterSpacing: 0.5,
+    fontWeight: '800',
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 8,
     marginBottom: 8,
   },
-  commentaireInput: {
-    backgroundColor: '#F8FAFC',
+  starBtn: {
+    padding: 4,
+  },
+  starIcon: {
+    fontSize: 36,
+  },
+  starActive: {
+    color: '#EAB308',
+  },
+  starInactive: {
+    color: '#E2E8F0',
+  },
+  scoreLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: 16,
+  },
+  badgesSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 10,
+    alignSelf: 'flex-start',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+    width: '100%',
+  },
+  badgeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  badgeChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: colors.primary,
+  },
+  badgeChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  badgeChipTextActive: {
+    color: colors.primary,
+  },
+  commentInput: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     borderRadius: 16,
     padding: 14,
     fontSize: 13,
-    color: colors.text,
-    minHeight: 80,
-    textAlignVertical: 'top',
+    color: '#0F172A',
+    minHeight: 70,
   },
-  sectionBadges: {
-    width: '100%',
-    marginBottom: 24,
-  },
-  titreBadges: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textLight,
-    letterSpacing: 0.8,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  badgesGrille: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  badgePill: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    ...shadows.card,
-  },
-  badgePillActif: {
-    backgroundColor: '#ECFDF5',
-    borderColor: colors.primary,
-    borderWidth: 1.5,
-  },
-  badgePillTexte: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  badgePillTexteActif: {
-    color: colors.primaryDark,
-    fontWeight: '800',
-  },
-  boutonEnvoyer: {
-    width: '100%',
+  submitBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 20,
     paddingVertical: 16,
+    borderRadius: 24,
     alignItems: 'center',
-    marginBottom: 14,
     ...shadows.elevated,
+    marginBottom: 12,
   },
-  boutonEnvoyerTexte: {
-    color: colors.white,
+  submitBtnText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
   },
-  boutonPasser: {
+  skipBtn: {
+    alignItems: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 20,
   },
-  boutonPasserTexte: {
-    color: colors.textLight,
-    fontSize: 14,
+  skipBtnText: {
+    color: '#64748B',
+    fontSize: 13,
     fontWeight: '600',
   },
 });
-

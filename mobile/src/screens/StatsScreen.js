@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import api from '../api';
 import UniHeader from '../components/UniHeader';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 
 export default function StatsScreen({ navigation }) {
   const [stats, setStats] = useState(null);
@@ -46,9 +46,10 @@ export default function StatsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <UniHeader
-        titre="Statistiques & Badges"
-        sousTitre="Votre impact éco-responsable ISET"
-        onBack={() => navigation.goBack()}
+        title="Statistiques & Badges"
+        subtitle="Votre impact \u00e9co-responsable ISET"
+        navigation={navigation}
+        showBack={true}
       />
 
       <ScrollView
@@ -64,58 +65,54 @@ export default function StatsScreen({ navigation }) {
           />
         }
       >
-        {/* Résumé des indicateurs clés (Image 1 "Tableau de bord" & "Mon Espace") */}
+        {/* R\u00e9sum\u00e9 des indicateurs cl\u00e9s (Image 1 "Tableau de bord global") */}
         <View style={styles.grilleChiffres}>
-          {/* Argent économisé */}
-          <View style={[styles.carteChiffre, { borderTopColor: '#10B981' }]}>
-            <Text style={styles.carteIcone}>💰</Text>
-            <Text style={styles.carteValeur}>{stats?.argentEconomise || 0} DT</Text>
-            <Text style={styles.carteLibelle}>Argent économisé</Text>
-            <Text style={styles.carteDetail}>
-              Conducteur: {stats?.gainsConducteur || 0} DT · Passager: {stats?.argentEconomisePassager || 0} DT
-            </Text>
-          </View>
-
-          {/* CO2 évité */}
+          {/* Argent \u00e9conomis\u00e9 */}
           <View style={[styles.carteChiffre, { borderTopColor: colors.primary }]}>
-            <Text style={styles.carteIcone}>🌱</Text>
-            <Text style={styles.carteValeur}>{stats?.co2Economise || 0} kg</Text>
-            <Text style={styles.carteLibelle}>CO₂ évité</Text>
+            <Text style={styles.carteValeur}>{stats?.argentEconomise || 0} DT</Text>
+            <Text style={styles.carteLibelle}>\u00c9conomies r\u00e9alis\u00e9es</Text>
             <Text style={styles.carteDetail}>
-              ≈ {Math.max(1, Math.round((stats?.co2Economise || 0) / 2))} arbres préservés
+              Conducteur: {stats?.gainsConducteur || 0} DT \u00b7 Passager: {stats?.argentEconomisePassager || 0} DT
             </Text>
           </View>
 
-          {/* Trajets effectués */}
-          <View style={[styles.carteChiffre, { borderTopColor: '#3B82F6' }]}>
-            <Text style={styles.carteIcone}>🚗</Text>
-            <Text style={styles.carteValeur}>{stats?.trajetsEffectues || 0}</Text>
-            <Text style={styles.carteLibelle}>Trajets partagés</Text>
+          {/* CO2 \u00e9vit\u00e9 */}
+          <View style={[styles.carteChiffre, { borderTopColor: colors.accent }]}>
+            <Text style={styles.carteValeur}>{stats?.co2Economise || 0} kg</Text>
+            <Text style={styles.carteLibelle}>CO\u2082 \u00e9vit\u00e9</Text>
             <Text style={styles.carteDetail}>
-              {stats?.trajetsConducteur || 0} cond. · {stats?.trajetsPassager || 0} pass.
+              \u2248 {Math.max(1, Math.round((stats?.co2Economise || 0) / 2))} arbres pr\u00e9serv\u00e9s
+            </Text>
+          </View>
+
+          {/* Trajets effectu\u00e9s */}
+          <View style={[styles.carteChiffre, { borderTopColor: '#3B82F6' }]}>
+            <Text style={styles.carteValeur}>{stats?.trajetsEffectues || 0}</Text>
+            <Text style={styles.carteLibelle}>Trajets partag\u00e9s</Text>
+            <Text style={styles.carteDetail}>
+              {stats?.trajetsConducteur || 0} cond. \u00b7 {stats?.trajetsPassager || 0} pass.
             </Text>
           </View>
 
           {/* Note moyenne */}
           <View style={[styles.carteChiffre, { borderTopColor: '#F59E0B' }]}>
-            <Text style={styles.carteIcone}>⭐</Text>
-            <Text style={styles.carteValeur}>{(stats?.noteMoyenne || 5.0).toFixed(1)} / 5</Text>
+            <Text style={styles.carteValeur}>\u2605 {(stats?.noteMoyenne || 5.0).toFixed(1)}</Text>
             <Text style={styles.carteLibelle}>Confiance & Avis</Text>
-            <Text style={styles.carteDetail}>{stats?.nombreAvis || 0} avis reçus</Text>
+            <Text style={styles.carteDetail}>{stats?.nombreAvis || 0} avis re\u00e7us</Text>
           </View>
         </View>
 
-        {/* Section Badges (US17) */}
+        {/* Section Badges */}
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitre}>BADGES & VALORISATION</Text>
             <Text style={styles.sectionSousTitre}>
-              {nbBadgesDebloques} sur {badges.length} badges débloqués
+              {nbBadgesDebloques} sur {badges.length} badges d\u00e9bloqu\u00e9s
             </Text>
           </View>
           <View style={styles.badgeCompteurPill}>
             <Text style={styles.badgeCompteurTexte}>
-              🏆 {nbBadgesDebloques}/{badges.length}
+              {nbBadgesDebloques} / {badges.length}
             </Text>
           </View>
         </View>
@@ -136,7 +133,7 @@ export default function StatsScreen({ navigation }) {
                   b.debloque ? styles.badgeIconeDebloque : styles.badgeIconeBloque,
                 ]}
               >
-                <Text style={styles.badgeEmoji}>{b.emoji}</Text>
+                <Text style={styles.badgeLetter}>{b.titre ? b.titre[0] : 'B'}</Text>
               </View>
 
               <View style={styles.badgeContenu}>
@@ -161,7 +158,7 @@ export default function StatsScreen({ navigation }) {
                         b.debloque ? styles.statutTexteDebloque : styles.statutTexteBloque,
                       ]}
                     >
-                      {b.debloque ? 'DÉBLOQUÉ ✓' : 'À OBTENIR'}
+                      {b.debloque ? 'D\u00c9BLOQU\u00c9' : '\u00c0 OBTENIR'}
                     </Text>
                   </View>
                 </View>
@@ -187,27 +184,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 40,
   },
   grilleChiffres: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
+    gap: 10,
+    marginBottom: 20,
   },
   carteChiffre: {
     width: '48%',
     backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 16,
-    borderTopWidth: 4,
+    borderRadius: radius.md,
+    padding: 14,
+    borderTopWidth: 3,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
     ...shadows.card,
-  },
-  carteIcone: {
-    fontSize: 24,
-    marginBottom: 8,
   },
   carteValeur: {
     fontSize: 22,
@@ -229,12 +224,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   sectionTitre: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    color: colors.textLight,
+    color: colors.textMuted,
     letterSpacing: 0.8,
   },
   sectionSousTitre: {
@@ -243,12 +238,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   badgeCompteurPill: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
   },
   badgeCompteurTexte: {
     fontSize: 12,
@@ -256,41 +249,43 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
   },
   badgesListe: {
-    gap: 12,
+    gap: 10,
   },
   badgeItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1.5,
+    borderRadius: radius.lg,
+    padding: 14,
+    borderWidth: 1,
     ...shadows.card,
   },
   badgeItemDebloque: {
     borderColor: '#86EFAC',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: colors.card,
   },
   badgeItemBloque: {
-    borderColor: '#E2E8F0',
-    opacity: 0.75,
+    borderColor: colors.borderLight,
+    opacity: 0.7,
   },
   badgeIconeConteneur: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   badgeIconeDebloque: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.primaryLight,
   },
   badgeIconeBloque: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.inputBg,
   },
-  badgeEmoji: {
-    fontSize: 24,
+  badgeLetter: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.primary,
   },
   badgeContenu: {
     flex: 1,
@@ -302,7 +297,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   badgeNom: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: colors.text,
   },
@@ -312,13 +307,13 @@ const styles = StyleSheet.create({
   statutPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: radius.sm,
   },
   statutPillDebloque: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.successLight,
   },
   statutPillBloque: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.inputBg,
   },
   statutTexte: {
     fontSize: 9,
@@ -337,4 +332,3 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 });
-

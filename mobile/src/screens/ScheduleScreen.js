@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ScrollView,
   View,
@@ -9,19 +9,20 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import UniHeader from '../components/UniHeader';
 
 const JOURS = [
-  { cle: 'lundi', label: 'Lundi' },
-  { cle: 'mardi', label: 'Mardi' },
-  { cle: 'mercredi', label: 'Mercredi' },
-  { cle: 'jeudi', label: 'Jeudi' },
-  { cle: 'vendredi', label: 'Vendredi' },
-  { cle: 'samedi', label: 'Samedi' },
+  { cle: 'lundi', code: 'LUN', num: '01', label: 'Lundi' },
+  { cle: 'mardi', code: 'MAR', num: '02', label: 'Mardi' },
+  { cle: 'mercredi', code: 'MER', num: '03', label: 'Mercredi' },
+  { cle: 'jeudi', code: 'JEU', num: '04', label: 'Jeudi' },
+  { cle: 'vendredi', code: 'VEN', num: '05', label: 'Vendredi' },
+  { cle: 'samedi', code: 'SAM', num: '06', label: 'Samedi' },
 ];
 
 const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -31,6 +32,7 @@ const etatVide = () =>
 
 export default function ScheduleScreen({ navigation }) {
   const [lignes, setLignes] = useState(etatVide());
+  const [jourSelectionne, setJourSelectionne] = useState('lundi');
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
   const [importEnCours, setImportEnCours] = useState(false);
@@ -49,11 +51,11 @@ export default function ScheduleScreen({ navigation }) {
       .finally(() => setChargement(false));
   }, []);
 
-  const modifier = (cle, champ, valeur) => {
+  const modifier = useCallback((cle, champ, valeur) => {
     setLignes((avant) => ({ ...avant, [cle]: { ...avant[cle], [champ]: valeur } }));
-  };
+  }, []);
 
-  const importerFichier = async () => {
+  const importerFichier = useCallback(async () => {
     try {
       const choix = await DocumentPicker.getDocumentAsync({
         type: '*/*',
@@ -80,17 +82,17 @@ export default function ScheduleScreen({ navigation }) {
       setLignes(etat);
 
       Alert.alert(
-        'Importation réussie ! 🎉',
-        `${data.jours.length} jour(s) détecté(s). Vérifiez vos heures puis appuyez sur Enregistrer.`
+        'Importation réussie !',
+        `${data.jours.length} jour(s) synchronisé(s). Vérifiez vos heures puis appuyez sur Enregistrer.`
       );
     } catch (err) {
       Alert.alert('Erreur', err.response?.data?.message || 'Lecture du fichier impossible');
     } finally {
       setImportEnCours(false);
     }
-  };
+  }, []);
 
-  const enregistrer = async () => {
+  const enregistrer = useCallback(async () => {
     const jours = [];
     for (const j of JOURS) {
       const l = lignes[j.cle];
@@ -103,13 +105,13 @@ export default function ScheduleScreen({ navigation }) {
         Alert.alert('Heure incorrecte', `${j.label} : l'heure de départ doit être après l'heure d'arrivée`);
         return;
       }
-      jours.push({ jour: j.cle, debut: l.debut, fin: l.fin });
+      jours.push({ jour: j.cle, debut: l.debut, fin: j.fin });
     }
 
     setEnvoi(true);
     try {
       await api.put('/schedule/me', { jours });
-      Alert.alert('Succès !', 'Emploi du temps enregistré pour le calcul automatique des trajets.', [
+      Alert.alert('Succès !', 'Emploi du temps enregistré pour le matching intelligent avec vos camarades.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
@@ -117,111 +119,169 @@ export default function ScheduleScreen({ navigation }) {
     } finally {
       setEnvoi(false);
     }
-  };
+  }, [lignes, navigation]);
 
   if (chargement) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={s.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
+  const ligneCourante = lignes[jourSelectionne] || { actif: false, debut: '', fin: '' };
+  const jourObj = JOURS.find((j) => j.cle === jourSelectionne) || JOURS[0];
+
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
       <UniHeader
-        title="Mon Emploi du Temps"
-        subtitle="Matching Intelligent (ISET Nabeul)"
+        title="Mon Planning"
+        subtitle="Emploi du temps ISET Nabeul"
         navigation={navigation}
         showBack={true}
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Banner import */}
-        <View style={styles.importCard}>
-          <Text style={styles.importIcon}>🗓️</Text>
-          <Text style={styles.importTitre}>Synchronisez votre planning</Text>
-          <Text style={styles.importDesc}>
-            Importez votre fichier .ICS ou .CSV fourni par l'institut pour matcher directement avec les conducteurs
-            ayant les mêmes horaires de cours.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.boutonImport}
-            onPress={importerFichier}
-            disabled={importEnCours}
-            activeOpacity={0.85}
-          >
-            {importEnCours ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.boutonImportTexte}>Importer un fichier (.ics / .csv)</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Jours de cours */}
-        <Text style={styles.sectionTitre}>Horaires de cours par jour</Text>
-
-        {JOURS.map((j) => {
-          const l = lignes[j.cle];
-          return (
-            <View key={j.cle} style={[styles.jourCard, l.actif && styles.jourCardActif]}>
-              <View style={styles.jourHeader}>
-                <View style={styles.jourInfo}>
-                  <View style={[styles.jourBullet, l.actif && styles.jourBulletActif]} />
-                  <Text style={[styles.jourLabel, l.actif && styles.jourLabelActif]}>{j.label}</Text>
+      <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* ─── Sélecteur horizontal de jours (Page 5 PDF) ─── */}
+        <Text style={s.sectionTitle}>Semaine Universitaire</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.daysRow}
+        >
+          {JOURS.map((j) => {
+            const isSelected = jourSelectionne === j.cle;
+            const hasClass = lignes[j.cle]?.actif;
+            return (
+              <TouchableOpacity
+                key={j.cle}
+                style={[s.dayChip, isSelected && s.dayChipActive]}
+                onPress={() => setJourSelectionne(j.cle)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.dayCode, isSelected && s.dayCodeActive]}>{j.code}</Text>
+                <View style={[s.dayCircle, isSelected && s.dayCircleActive]}>
+                  <Text style={[s.dayNum, isSelected && s.dayNumActive]}>{j.num}</Text>
                 </View>
-                <Switch
-                  value={l.actif}
-                  onValueChange={(v) => modifier(j.cle, 'actif', v)}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                />
+                {hasClass && <View style={[s.dotIndicator, isSelected && s.dotIndicatorActive]} />}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* ─── Carte détaillée du jour sélectionné ─── */}
+        <View style={s.detailCard}>
+          <View style={s.detailCardHeader}>
+            <View>
+              <Text style={s.detailDayName}>{jourObj.label}</Text>
+              <Text style={s.detailDayStatus}>
+                {ligneCourante.actif ? 'Journée de cours programmée' : 'Pas de cours ce jour'}
+              </Text>
+            </View>
+            <Switch
+              value={ligneCourante.actif}
+              onValueChange={(val) => modifier(jourSelectionne, 'actif', val)}
+              trackColor={{ false: '#E2E8F0', true: colors.primary }}
+              thumbColor={ligneCourante.actif ? colors.accent : '#FFF'}
+            />
+          </View>
+
+          {ligneCourante.actif ? (
+            <View style={s.hoursBlock}>
+              <View style={s.timelineItem}>
+                <View style={s.timelineBadgeBlue}>
+                  <Text style={s.timelineBadgeText}>Arrivée</Text>
+                </View>
+                <View style={s.timelineContent}>
+                  <Text style={s.inputLabel}>Premier cours à l'ISET</Text>
+                  <TextInput
+                    style={s.hourInput}
+                    value={ligneCourante.debut}
+                    onChangeText={(val) => modifier(jourSelectionne, 'debut', val)}
+                    placeholder="08:30"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={5}
+                  />
+                </View>
               </View>
 
-              {l.actif && (
-                <View style={styles.heuresRow}>
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={styles.heureLabel}>Premier cours (Arrivée)</Text>
-                    <TextInput
-                      style={styles.inputHeure}
-                      value={l.debut}
-                      onChangeText={(v) => modifier(j.cle, 'debut', v)}
-                      placeholder="08:30"
-                      placeholderTextColor={colors.textLight}
-                      keyboardType="numbers-and-punctuation"
-                      maxLength={5}
-                    />
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.heureLabel}>Dernier cours (Départ)</Text>
-                    <TextInput
-                      style={styles.inputHeure}
-                      value={l.fin}
-                      onChangeText={(v) => modifier(j.cle, 'fin', v)}
-                      placeholder="16:00"
-                      placeholderTextColor={colors.textLight}
-                      keyboardType="numbers-and-punctuation"
-                      maxLength={5}
-                    />
-                  </View>
+              <View style={s.timelineItem}>
+                <View style={s.timelineBadgeYellow}>
+                  <Text style={s.timelineBadgeTextYellow}>Départ</Text>
                 </View>
-              )}
-            </View>
-          );
-        })}
+                <View style={s.timelineContent}>
+                  <Text style={s.inputLabel}>Dernier cours (Départ)</Text>
+                  <TextInput
+                    style={s.hourInput}
+                    value={ligneCourante.fin}
+                    onChangeText={(val) => modifier(jourSelectionne, 'fin', val)}
+                    placeholder="16:00"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={5}
+                  />
+                </View>
+              </View>
 
+              <View style={s.infoTip}>
+                <Text style={s.infoTipIcon}>ℹ️</Text>
+                <Text style={s.infoTipText}>
+                  Vos trajets proposés ou recherchés seront automatiquement synchronisés avec ces heures pour maximiser votre score de matching.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={s.emptyDayBox}>
+              <Text style={s.emptyDayIcon}>🏖️</Text>
+              <Text style={s.emptyDayText}>Aucun cours programmé pour ce jour.</Text>
+              <TouchableOpacity
+                style={s.activateDayBtn}
+                onPress={() => modifier(jourSelectionne, 'actif', true)}
+              >
+                <Text style={s.activateDayBtnText}>+ Ajouter des heures de cours</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* ─── Synchronisation Intelligente (Page 7 PDF) ─── */}
+        <View style={s.syncCard}>
+          <View style={s.dashedBox}>
+            <View style={s.syncIconContainer}>
+              <Text style={s.syncIcon}>📅</Text>
+            </View>
+            <Text style={s.syncTitle}>Synchronisation Intelligente</Text>
+            <Text style={s.syncSubtitle}>
+              Importez votre emploi du temps (.ics ou .csv) pour configurer automatiquement toute votre semaine en 1 clic.
+            </Text>
+
+            <TouchableOpacity
+              style={s.browseBtn}
+              onPress={importerFichier}
+              disabled={importEnCours}
+              activeOpacity={0.85}
+            >
+              {importEnCours ? (
+                <ActivityIndicator color={colors.navy} />
+              ) : (
+                <Text style={s.browseBtnText}>Choisir un fichier (.ics / .csv)</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ─── Bouton Sauvegarder (Bleu Royal) ─── */}
         <TouchableOpacity
-          style={styles.boutonEnregistrer}
+          style={s.saveButton}
           onPress={enregistrer}
           disabled={envoi}
           activeOpacity={0.85}
         >
           {envoi ? (
-            <ActivityIndicator color={colors.white} />
+            <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.boutonEnregistrerTexte}>Enregistrer mon emploi du temps</Text>
+            <Text style={s.saveButtonText}>Enregistrer mon planning</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -229,7 +289,7 @@ export default function ScheduleScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -244,129 +304,263 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
-  importCard: {
-    backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    ...shadows.card,
-  },
-  importIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  importTitre: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.primaryDark,
-  },
-  importDesc: {
-    fontSize: 12,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 16,
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  boutonImport: {
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 22,
-    borderRadius: 20,
-    ...shadows.card,
-  },
-  boutonImportTexte: {
-    color: colors.white,
-    fontWeight: 'bold',
+  sectionTitle: {
     fontSize: 14,
-  },
-  sectionTitre: {
-    fontSize: 13,
     fontWeight: '800',
-    color: colors.textMuted,
+    color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 12,
   },
-  jourCard: {
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+  daysRow: {
+    paddingBottom: 16,
+    gap: 10,
   },
-  jourCardActif: {
-    borderColor: '#BBF7D0',
-    backgroundColor: colors.card,
+  dayChip: {
+    width: 60,
+    paddingVertical: 12,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     ...shadows.card,
   },
-  jourHeader: {
+  dayChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+    transform: [{ scale: 1.05 }],
+  },
+  dayCode: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  dayCodeActive: {
+    color: '#FFFFFF',
+  },
+  dayCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayCircleActive: {
+    backgroundColor: colors.accent,
+  },
+  dayNum: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  dayNumActive: {
+    color: colors.navy,
+  },
+  dotIndicator: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: colors.primary,
+    marginTop: 6,
+  },
+  dotIndicatorActive: {
+    backgroundColor: colors.accent,
+  },
+  detailCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
+  },
+  detailCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  jourInfo: {
+  detailDayName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  detailDayStatus: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  hoursBlock: {
+    marginTop: 16,
+  },
+  timelineItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 14,
   },
-  jourBullet: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.border,
-    marginRight: 10,
+  timelineBadgeBlue: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    marginRight: 12,
+    width: 70,
+    alignItems: 'center',
   },
-  jourBulletActif: {
-    backgroundColor: colors.primary,
+  timelineBadgeText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
   },
-  jourLabel: {
+  timelineBadgeYellow: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#FEF9C3',
+    marginRight: 12,
+    width: 70,
+    alignItems: 'center',
+  },
+  timelineBadgeTextYellow: {
+    color: '#854D0E',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  hourInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     fontSize: 15,
     fontWeight: '700',
-    color: colors.textMuted,
+    color: '#0F172A',
   },
-  jourLabelActif: {
-    color: colors.text,
-  },
-  heuresRow: {
+  infoTip: {
     flexDirection: 'row',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  heureLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-    marginBottom: 6,
-  },
-  inputHeure: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#F0F9FF',
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.text,
-  },
-  boutonEnregistrer: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 25,
+    padding: 12,
+    marginTop: 6,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
+  },
+  infoTipIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  infoTipText: {
+    fontSize: 12,
+    color: '#0369A1',
+    flex: 1,
+    lineHeight: 16,
+  },
+  emptyDayBox: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  emptyDayIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  emptyDayText: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  activateDayBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+  },
+  activateDayBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  syncCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     ...shadows.card,
   },
-  boutonEnregistrerTexte: {
-    color: colors.white,
-    fontWeight: '800',
+  dashedBox: {
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+  },
+  syncIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  syncIcon: {
+    fontSize: 24,
+  },
+  syncTitle: {
     fontSize: 16,
-    letterSpacing: 0.3,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  syncSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 14,
+    paddingHorizontal: 10,
+  },
+  browseBtn: {
+    backgroundColor: colors.accent,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 24,
+    ...shadows.card,
+  },
+  browseBtnText: {
+    color: colors.navy,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  saveButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 24,
+    alignItems: 'center',
+    ...shadows.elevated,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
 });

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import UniHeader from '../components/UniHeader';
 
 function formatTempsRelatif(dateStr) {
@@ -20,7 +20,7 @@ function formatTempsRelatif(dateStr) {
   const now = new Date();
   const diffMin = Math.round((now - date) / (1000 * 60));
 
-  if (diffMin < 1) return "À l'instant";
+  if (diffMin < 1) return "\u00c0 l'instant";
   if (diffMin < 60) return `Il y a ${diffMin} min`;
   const diffH = Math.round(diffMin / 60);
   if (diffH < 24) return `Il y a ${diffH} h`;
@@ -30,21 +30,21 @@ function formatTempsRelatif(dateStr) {
 function iconConfig(type) {
   switch (type) {
     case 'trajet_demarre':
-      return { icon: '🚗', bg: '#DCFCE7', color: '#16A34A' };
+      return { letter: 'D', bg: '#DCFCE7', color: '#16A34A' };
     case 'trajet_termine':
-      return { icon: '🏁', bg: '#FEF3C7', color: '#D97706' };
+      return { letter: 'T', bg: '#FEF3C7', color: '#D97706' };
     case 'reservation_recue':
-      return { icon: '💺', bg: '#E0F2FE', color: '#0284C7' };
+      return { letter: 'R', bg: '#E0F2FE', color: '#0284C7' };
     case 'reservation_acceptee':
-      return { icon: '🎉', bg: '#DCFCE7', color: '#16A34A' };
+      return { letter: 'A', bg: '#DCFCE7', color: '#16A34A' };
     case 'reservation_refusee':
-      return { icon: '✕', bg: '#FEE2E2', color: '#DC2626' };
+      return { letter: 'X', bg: '#FEE2E2', color: '#DC2626' };
     case 'reservation_annulee':
-      return { icon: '⚠️', bg: '#FFEDD5', color: '#EA580C' };
+      return { letter: '!', bg: '#FFEDD5', color: '#EA580C' };
     case 'trajet_annule':
-      return { icon: '🚫', bg: '#FEE2E2', color: '#DC2626' };
+      return { letter: 'X', bg: '#FEE2E2', color: '#DC2626' };
     default:
-      return { icon: '🔔', bg: colors.primaryLight, color: colors.primary };
+      return { letter: 'N', bg: colors.primaryLight, color: colors.primary };
   }
 }
 
@@ -53,7 +53,7 @@ export default function NotificationsScreen({ navigation }) {
   const [nbNonLues, setNbNonLues] = useState(0);
   const [chargement, setChargement] = useState(true);
   const [rafraichir, setRafraichir] = useState(false);
-  const [filtre, setFiltre] = useState('toutes'); // 'toutes' | 'non_lues'
+  const [filtre, setFiltre] = useState('toutes');
 
   const charger = useCallback(async () => {
     try {
@@ -74,7 +74,7 @@ export default function NotificationsScreen({ navigation }) {
     }, [charger])
   );
 
-  const marquerToutLu = async () => {
+  const marquerToutLu = useCallback(async () => {
     try {
       await api.patch('/notifications/read-all');
       setNotifications((avant) => avant.map((n) => ({ ...n, lu: true })));
@@ -82,9 +82,9 @@ export default function NotificationsScreen({ navigation }) {
     } catch (err) {
       Alert.alert('Erreur', 'Impossible de marquer comme lu');
     }
-  };
+  }, []);
 
-  const ouvrirNotification = async (item) => {
+  const ouvrirNotification = useCallback(async (item) => {
     if (!item.lu) {
       api.patch(`/notifications/${item._id}/read`).catch(() => {});
       setNotifications((avant) =>
@@ -103,12 +103,43 @@ export default function NotificationsScreen({ navigation }) {
     } else if (donnees?.trajetId) {
       navigation.navigate('RideDetail', { id: donnees.trajetId });
     }
-  };
+  }, [navigation]);
 
   const notificationsAffichees =
     filtre === 'non_lues'
       ? notifications.filter((n) => !n.lu)
       : notifications;
+
+  const renderItem = useCallback(({ item }) => {
+    const cfg = iconConfig(item.type);
+
+    return (
+      <TouchableOpacity
+        style={[styles.notifCard, !item.lu && styles.notifCardNonLue]}
+        onPress={() => ouvrirNotification(item)}
+        activeOpacity={0.8}
+      >
+        <View style={[styles.iconBox, { backgroundColor: cfg.bg }]}>
+          <Text style={[styles.iconSymbol, { color: cfg.color }]}>{cfg.letter}</Text>
+        </View>
+
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <View style={styles.notifHeader}>
+            <Text style={[styles.notifTitre, !item.lu && styles.notifTitreGras]} numberOfLines={1}>
+              {item.titre}
+            </Text>
+            <Text style={styles.notifDate}>{formatTempsRelatif(item.createdAt)}</Text>
+          </View>
+
+          <Text style={styles.notifMessage} numberOfLines={2}>
+            {item.message}
+          </Text>
+        </View>
+
+        {!item.lu && <View style={styles.greenDot} />}
+      </TouchableOpacity>
+    );
+  }, [ouvrirNotification]);
 
   if (chargement) {
     return (
@@ -159,6 +190,7 @@ export default function NotificationsScreen({ navigation }) {
         data={notificationsAffichees}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
+        renderItem={renderItem}
         refreshControl={
           <RefreshControl
             refreshing={rafraichir}
@@ -171,46 +203,18 @@ export default function NotificationsScreen({ navigation }) {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🔔</Text>
+            <View style={styles.emptyIconBox}>
+              <Text style={styles.emptyIconLetter}>N</Text>
+            </View>
             <Text style={styles.emptyTitle}>
               {filtre === 'non_lues' ? 'Aucune notification non lue' : 'Aucune notification'}
             </Text>
             <Text style={styles.emptySub}>
-              Vous serez notifié dès qu'un passager réserve, qu'un conducteur accepte votre trajet ou
-              lorsqu'un covoiturage démarre.
+              Vous serez notifi\u00e9 d\u00e8s qu'un passager r\u00e9serve, qu'un conducteur accepte votre trajet ou
+              lorsqu'un covoiturage d\u00e9marre.
             </Text>
           </View>
         }
-        renderItem={({ item }) => {
-          const cfg = iconConfig(item.type);
-
-          return (
-            <TouchableOpacity
-              style={[styles.notifCard, !item.lu && styles.notifCardNonLue]}
-              onPress={() => ouvrirNotification(item)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.iconBox, { backgroundColor: cfg.bg }]}>
-                <Text style={styles.iconSymbol}>{cfg.icon}</Text>
-              </View>
-
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={styles.notifHeader}>
-                  <Text style={[styles.notifTitre, !item.lu && styles.notifTitreGras]} numberOfLines={1}>
-                    {item.titre}
-                  </Text>
-                  <Text style={styles.notifDate}>{formatTempsRelatif(item.createdAt)}</Text>
-                </View>
-
-                <Text style={styles.notifMessage} numberOfLines={2}>
-                  {item.message}
-                </Text>
-              </View>
-
-              {!item.lu && <View style={styles.greenDot} />}
-            </TouchableOpacity>
-          );
-        }}
       />
     </View>
   );
@@ -228,9 +232,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   toutLuBtn: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 10,
+    borderRadius: radius.full,
     backgroundColor: colors.primaryLight,
   },
   toutLuText: {
@@ -245,13 +249,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
+    gap: 8,
   },
   tabPill: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: colors.background,
-    marginRight: 8,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+    backgroundColor: colors.inputBg,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -260,7 +264,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   tabTexte: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.textMuted,
   },
@@ -275,7 +279,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 18,
+    borderRadius: radius.lg,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
@@ -283,18 +287,19 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   notifCardNonLue: {
-    borderColor: '#BBF7D0',
-    backgroundColor: '#F8FCF8',
+    borderColor: '#BFDBFE',
+    backgroundColor: '#F8FAFC',
   },
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
   },
   iconSymbol: {
-    fontSize: 20,
+    fontSize: 16,
+    fontWeight: '900',
   },
   notifHeader: {
     flexDirection: 'row',
@@ -318,7 +323,7 @@ const styles = StyleSheet.create({
   },
   notifMessage: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     lineHeight: 16,
   },
   greenDot: {
@@ -334,9 +339,19 @@ const styles = StyleSheet.create({
     paddingVertical: 70,
     paddingHorizontal: 24,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  emptyIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  emptyIconLetter: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: colors.primary,
   },
   emptyTitle: {
     fontSize: 17,
@@ -352,4 +367,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-

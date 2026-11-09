@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ScrollView,
   View,
@@ -10,7 +10,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import UniHeader from '../components/UniHeader';
 
 const COULEURS = [
@@ -48,25 +48,25 @@ export default function VehicleScreen({ navigation }) {
           setExiste(true);
         }
       })
-      .catch(() => Alert.alert('Erreur', 'Impossible de charger le véhicule'))
+      .catch(() => Alert.alert('Erreur', 'Impossible de charger le v\u00e9hicule'))
       .finally(() => setChargement(false));
   }, []);
 
-  const enregistrer = async () => {
+  const enregistrer = useCallback(async () => {
     if (!marque.trim() || !couleur || !places || !matricule.trim()) {
-      Alert.alert('Champs obligatoires', 'Veuillez remplir tous les champs, y compris la couleur du véhicule.');
+      Alert.alert('Champs obligatoires', 'Veuillez remplir tous les champs, y compris la couleur du v\u00e9hicule.');
       return;
     }
     const nbPlaces = Number(places);
     if (!Number.isInteger(nbPlaces) || nbPlaces < 1 || nbPlaces > 8) {
-      Alert.alert('Places invalides', 'Le nombre de places doit être compris entre 1 et 8.');
+      Alert.alert('Places invalides', 'Le nombre de places doit \u00eatre compris entre 1 et 8.');
       return;
     }
 
     setEnvoi(true);
     try {
       await api.put('/users/me/vehicule', { marque, couleur, places: nbPlaces, matricule });
-      Alert.alert('Véhicule enregistré ! 🚗', 'Vous pouvez désormais publier des trajets sur UniRide.', [
+      Alert.alert('V\u00e9hicule enregistr\u00e9 !', 'Vous pouvez d\u00e9sormais publier des trajets sur UniRide.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
@@ -74,12 +74,12 @@ export default function VehicleScreen({ navigation }) {
     } finally {
       setEnvoi(false);
     }
-  };
+  }, [marque, couleur, places, matricule, navigation]);
 
-  const supprimer = () => {
+  const supprimer = useCallback(() => {
     Alert.alert(
-      'Retirer le véhicule',
-      'Êtes-vous sûr de vouloir retirer votre véhicule ? Vous redeviendrez simple passager.',
+      'Retirer le v\u00e9hicule',
+      '\u00cates-vous s\u00fbr de vouloir retirer votre v\u00e9hicule ? Vous redeviendrez simple passager.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -88,7 +88,7 @@ export default function VehicleScreen({ navigation }) {
           onPress: async () => {
             try {
               await api.delete('/users/me/vehicule');
-              Alert.alert('Véhicule retiré');
+              Alert.alert('V\u00e9hicule retir\u00e9');
               navigation.goBack();
             } catch (err) {
               Alert.alert('Erreur', 'Suppression impossible');
@@ -97,7 +97,7 @@ export default function VehicleScreen({ navigation }) {
         },
       ]
     );
-  };
+  }, [navigation]);
 
   if (chargement) {
     return (
@@ -110,7 +110,7 @@ export default function VehicleScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <UniHeader
-        title="Mon Véhicule"
+        title="Mon V\u00e9hicule"
         subtitle="Devenir Conducteur ISET"
         navigation={navigation}
         showBack={true}
@@ -118,17 +118,19 @@ export default function VehicleScreen({ navigation }) {
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.infoBanner}>
-          <Text style={styles.infoBannerIcon}>🚘</Text>
-          <View style={{ flex: 1, marginLeft: 10 }}>
+          <View style={styles.bannerIconBox}>
+            <Text style={styles.bannerIconText}>V</Text>
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.infoBannerTitre}>Partagez vos trajets</Text>
             <Text style={styles.infoBannerSub}>
-              Enregistrez votre véhicule pour proposer vos places libres à d'autres étudiants de l'ISET Nabeul.
+              Enregistrez votre v\u00e9hicule pour proposer vos places libres \u00e0 d'autres \u00e9tudiants de l'ISET Nabeul.
             </Text>
           </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.label}>Marque et modèle</Text>
+          <Text style={styles.label}>MARQUE ET MOD\u00c8LE</Text>
           <TextInput
             style={styles.input}
             value={marque}
@@ -138,7 +140,7 @@ export default function VehicleScreen({ navigation }) {
           />
 
           <Text style={styles.label}>
-            Couleur{couleur ? ` : ${COULEURS.find((c) => c.valeur === couleur)?.label}` : ''}
+            COULEUR{couleur ? ` : ${COULEURS.find((c) => c.valeur === couleur)?.label}` : ''}
           </Text>
           <View style={styles.couleursGrid}>
             {COULEURS.map((c) => {
@@ -158,7 +160,7 @@ export default function VehicleScreen({ navigation }) {
             })}
           </View>
 
-          <Text style={styles.label}>Nombre de places passagers (1 à 8)</Text>
+          <Text style={styles.label}>NOMBRE DE PLACES PASSAGERS (1 \u00c0 8)</Text>
           <TextInput
             style={styles.input}
             value={places}
@@ -168,7 +170,7 @@ export default function VehicleScreen({ navigation }) {
             placeholderTextColor={colors.textLight}
           />
 
-          <Text style={styles.label}>Matricule</Text>
+          <Text style={styles.label}>MATRICULE</Text>
           <TextInput
             style={styles.input}
             value={matricule}
@@ -188,14 +190,14 @@ export default function VehicleScreen({ navigation }) {
               <ActivityIndicator color={colors.white} />
             ) : (
               <Text style={styles.boutonEnregistrerTexte}>
-                {existe ? 'Mettre à jour le véhicule' : 'Enregistrer mon véhicule'}
+                {existe ? 'Mettre \u00e0 jour le v\u00e9hicule' : 'Enregistrer mon v\u00e9hicule'}
               </Text>
             )}
           </TouchableOpacity>
 
           {existe && (
             <TouchableOpacity style={styles.boutonSupprimer} onPress={supprimer}>
-              <Text style={styles.boutonSupprimerTexte}>Retirer mon véhicule</Text>
+              <Text style={styles.boutonSupprimerTexte}>Retirer mon v\u00e9hicule</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -224,13 +226,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.primaryLight,
     padding: 14,
-    borderRadius: 18,
-    marginBottom: 16,
+    borderRadius: radius.md,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#BFDBFE',
   },
-  infoBannerIcon: {
-    fontSize: 24,
+  bannerIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bannerIconText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: colors.white,
   },
   infoBannerTitre: {
     fontSize: 14,
@@ -239,64 +251,64 @@ const styles = StyleSheet.create({
   },
   infoBannerSub: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     marginTop: 2,
     lineHeight: 16,
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: radius.lg,
+    padding: 18,
     borderWidth: 1,
     borderColor: colors.borderLight,
     ...shadows.card,
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.textMuted,
-    textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 6,
+    marginTop: 4,
   },
   input: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.inputBg,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     fontSize: 14,
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   couleursGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   couleurBouton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    marginRight: 10,
-    marginBottom: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 8,
+    marginBottom: 8,
     borderWidth: 2,
     borderColor: colors.border,
   },
   couleurBoutonActif: {
     borderColor: colors.primary,
-    borderWidth: 4,
+    borderWidth: 3,
     transform: [{ scale: 1.1 }],
   },
   boutonEnregistrer: {
     backgroundColor: colors.primary,
     paddingVertical: 15,
-    borderRadius: 25,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    ...shadows.card,
+    marginTop: 6,
+    ...shadows.elevated,
   },
   boutonEnregistrerTexte: {
     color: colors.white,
@@ -305,15 +317,15 @@ const styles = StyleSheet.create({
   },
   boutonSupprimer: {
     backgroundColor: colors.dangerLight,
-    paddingVertical: 13,
-    borderRadius: 25,
+    paddingVertical: 12,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 10,
   },
   boutonSupprimerTexte: {
     color: colors.danger,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 13,
   },
 });

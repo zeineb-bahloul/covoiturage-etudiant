@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ScrollView,
   View,
@@ -6,41 +6,21 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  Switch,
   StyleSheet,
+  Platform,
 } from 'react-native';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import AddressPicker from '../components/AddressPicker';
-import UniHeader from '../components/UniHeader';
-
-const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export default function SearchRideScreen({ navigation }) {
   const [lieu, setLieu] = useState(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [heure, setHeure] = useState('');
+  const [heure, setHeure] = useState('08:00');
   const [prixMax, setPrixMax] = useState('');
-  const [noteMin, setNoteMin] = useState(0);
-  const [nonFumeur, setNonFumeur] = useState(false);
-  const [mixte, setMixte] = useState(false);
 
-  const definirDateRapide = (joursAjoutes) => {
-    const d = new Date();
-    d.setDate(d.getDate() + joursAjoutes);
-    setDate(d.toISOString().slice(0, 10));
-  };
-
-  const rechercher = () => {
+  const rechercher = useCallback(() => {
     if (!lieu) {
-      Alert.alert('Point de départ requis', 'Indiquez votre lieu de départ pour lancer la recherche.');
-      return;
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      Alert.alert('Date invalide', 'Veuillez saisir la date au format AAAA-MM-JJ (ex : 2026-11-10)');
-      return;
-    }
-    if (heure && !HEURE.test(heure)) {
-      Alert.alert('Heure invalide', 'Veuillez saisir une heure au format HH:MM (ex : 08:00)');
+      Alert.alert('Point de départ requis', 'Indiquez votre lieu de départ.');
       return;
     }
 
@@ -51,139 +31,75 @@ export default function SearchRideScreen({ navigation }) {
       date,
       heure: heure || undefined,
       prixMax: prixMax ? prixMax.replace(',', '.') : undefined,
-      noteMin: noteMin > 0 ? noteMin : undefined,
-      nonFumeur: nonFumeur ? 'true' : undefined,
-      mixte: mixte ? 'true' : undefined,
     });
-  };
+  }, [lieu, date, heure, prixMax, navigation]);
 
   return (
-    <View style={styles.container}>
-      <UniHeader
-        title="Rechercher un trajet"
-        subtitle="Trouvez votre covoitureur ISET"
-        navigation={navigation}
-        showBack={true}
-      />
-
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Banner éco-campus */}
-        <View style={styles.bannerInfo}>
-          <Text style={styles.bannerIcon}>🌱</Text>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.bannerTitre}>UniRide Éco-Mobilité</Text>
-            <Text style={styles.bannerDesc}>
-              Recherchez des trajets directs vers l’ISET Nabeul partagés par vos camarades d’institut.
-            </Text>
-          </View>
-        </View>
-
-        {/* Formulaire de recherche */}
-        <View style={styles.card}>
-          <AddressPicker
-            titre="Mon point de départ"
-            valeur={lieu}
-            onChoisir={setLieu}
-            placeholder="Ex : Hammamet, Nabeul Jarzouna..."
-          />
-
-          <View style={styles.champGroupe}>
-            <Text style={styles.label}>Destination</Text>
-            <View style={styles.destinationFixe}>
-              <Text style={styles.destinationTexte}>📍 ISET Nabeul (Campus El Mahrsi)</Text>
-            </View>
+    <View style={s.container}>
+      <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* ─── Header Bleu Royal UniRide (Page 6) ─── */}
+        <View style={s.header}>
+          <View style={s.headerTitleRow}>
+            <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
+              <Text style={s.backArrow}>‹</Text>
+            </TouchableOpacity>
+            <Text style={s.headerTitle}>Trouver un trajet</Text>
           </View>
 
-          <View style={styles.champGroupe}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.label}>Date du trajet</Text>
-              <View style={styles.dateChipsRow}>
-                <TouchableOpacity style={styles.dateChip} onPress={() => definirDateRapide(0)}>
-                  <Text style={styles.dateChipText}>Aujourd'hui</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.dateChip} onPress={() => definirDateRapide(1)}>
-                  <Text style={styles.dateChipText}>Demain</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <TextInput
-              style={styles.input}
-              value={date}
-              onChangeText={setDate}
-              keyboardType="numbers-and-punctuation"
-              placeholder="AAAA-MM-JJ"
-              maxLength={10}
+          {/* Carte blanche de recherche */}
+          <View style={s.searchCard}>
+            <AddressPicker
+              titre="D'où partez-vous ?"
+              valeur={lieu}
+              onChoisir={setLieu}
+              placeholder="Saisissez votre ville ou quartier..."
             />
+
+            <View style={s.divider} />
+
+            <View style={s.fixedDestRow}>
+              <Text style={s.destIcon}>🏛</Text>
+              <Text style={s.destText}>ISET Nabeul (Campus El Mahrsi)</Text>
+            </View>
           </View>
 
-          <View style={styles.rowChamps}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={styles.label}>Heure souhaitée</Text>
+          {/* Barre de filtre date/heure avec bouton jaune */}
+          <View style={s.filterBar}>
+            <View style={s.filterItem}>
+              <Text style={s.filterIcon}>📅</Text>
               <TextInput
-                style={styles.input}
+                style={s.filterInput}
+                value={date}
+                onChangeText={setDate}
+                placeholder="AAAA-MM-JJ"
+                placeholderTextColor="rgba(255,255,255,0.7)"
+              />
+            </View>
+
+            <View style={s.filterDivider} />
+
+            <View style={s.filterItem}>
+              <Text style={s.filterIcon}>⏰</Text>
+              <TextInput
+                style={s.filterInput}
                 value={heure}
                 onChangeText={setHeure}
                 placeholder="08:00"
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
+                placeholderTextColor="rgba(255,255,255,0.7)"
               />
             </View>
 
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Prix max (DT)</Text>
-              <TextInput
-                style={styles.input}
-                value={prixMax}
-                onChangeText={setPrixMax}
-                placeholder="Ex : 5"
-                keyboardType="decimal-pad"
-              />
-            </View>
+            {/* Bouton Jaune de filtre / recherche (Page 6) */}
+            <TouchableOpacity style={s.yellowFilterBtn} onPress={rechercher} activeOpacity={0.85}>
+              <Text style={s.yellowFilterIcon}>🔍</Text>
+            </TouchableOpacity>
           </View>
+        </View>
 
-          {/* Filtres avancés (US7) */}
-          <Text style={[styles.label, { marginTop: 8, marginBottom: 8 }]}>Note minimale du conducteur</Text>
-          <View style={styles.noteRow}>
-            {[
-              { label: 'Toutes', val: 0 },
-              { label: '4.0+ ★', val: 4.0 },
-              { label: '4.5+ ★', val: 4.5 },
-            ].map((n) => {
-              const actif = noteMin === n.val;
-              return (
-                <TouchableOpacity
-                  key={n.label}
-                  style={[styles.notePill, actif && styles.notePillActif]}
-                  onPress={() => setNoteMin(n.val)}
-                >
-                  <Text style={[styles.notePillTexte, actif && styles.notePillTexteActif]}>
-                    {n.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Véhicule non-fumeur uniquement</Text>
-            <Switch
-              value={nonFumeur}
-              onValueChange={setNonFumeur}
-              trackColor={{ false: colors.border, true: colors.primary }}
-            />
-          </View>
-
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Trajet mixte uniquement</Text>
-            <Switch
-              value={mixte}
-              onValueChange={setMixte}
-              trackColor={{ false: colors.border, true: colors.primary }}
-            />
-          </View>
-
-          <TouchableOpacity style={styles.boutonChercher} onPress={rechercher} activeOpacity={0.85}>
-            <Text style={styles.boutonChercherTexte}>Rechercher un trajet</Text>
+        {/* Bouton de recherche principal */}
+        <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+          <TouchableOpacity style={s.btnRechercher} onPress={rechercher} activeOpacity={0.85}>
+            <Text style={s.btnRechercherText}>Rechercher les covoiturages</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -191,159 +107,124 @@ export default function SearchRideScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
     paddingBottom: 40,
   },
-  bannerInfo: {
+  header: {
+    backgroundColor: colors.primary,
+    paddingTop: Platform.OS === 'ios' ? 50 : 36,
+    paddingBottom: 28,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primaryLight,
-    padding: 14,
+    marginBottom: 16,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
-  bannerIcon: {
-    fontSize: 24,
+  backArrow: {
+    fontSize: 30,
+    color: colors.white,
+    fontWeight: '300',
   },
-  bannerTitre: {
-    fontSize: 14,
+  headerTitle: {
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.primaryDark,
+    color: colors.white,
   },
-  bannerDesc: {
-    fontSize: 12,
-    color: colors.textMuted,
-    lineHeight: 16,
-    marginTop: 2,
-  },
-  card: {
+  searchCard: {
     backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    borderRadius: radius.lg,
+    padding: 16,
+    ...shadows.elevated,
   },
-  champGroupe: {
-    marginBottom: 16,
+  divider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginVertical: 10,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  rowBetween: {
+  fixedDestRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  dateChipsRow: {
-    flexDirection: 'row',
-  },
-  dateChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginLeft: 6,
-  },
-  dateChipText: {
-    fontSize: 11,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  destinationFixe: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  destinationTexte: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primaryDark,
-  },
-  input: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-  },
-  rowChamps: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  noteRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  notePill: {
-    flex: 1,
     paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+  },
+  destIcon: {
+    fontSize: 18,
+    marginRight: 10,
+  },
+  destText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  filterBar: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: radius.md,
+    marginTop: 14,
+    paddingLeft: 14,
+    paddingRight: 4,
+    paddingVertical: 4,
+  },
+  filterItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterIcon: {
+    fontSize: 14,
     marginRight: 6,
   },
-  notePillActif: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  notePillTexte: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  notePillTexteActif: {
-    color: colors.white,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  switchLabel: {
+  filterInput: {
+    flex: 1,
     fontSize: 13,
-    color: colors.text,
-    fontWeight: '500',
+    color: colors.white,
+    fontWeight: '600',
   },
-  boutonChercher: {
+  filterDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginHorizontal: 8,
+  },
+  yellowFilterBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  yellowFilterIcon: {
+    fontSize: 18,
+    color: colors.text,
+    fontWeight: 'bold',
+  },
+  btnRechercher: {
     backgroundColor: colors.primary,
     paddingVertical: 16,
-    borderRadius: 25,
+    borderRadius: radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
-    ...shadows.card,
+    ...shadows.elevated,
   },
-  boutonChercherTexte: {
+  btnRechercherText: {
     color: colors.white,
-    fontWeight: '800',
     fontSize: 16,
-    letterSpacing: 0.3,
+    fontWeight: '800',
   },
 });

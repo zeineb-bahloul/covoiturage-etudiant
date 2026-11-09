@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 
 const FILIERES = [
   'Technologies de l’Informatique (TI)',
@@ -30,8 +30,9 @@ export default function RegisterScreen({ navigation }) {
   const [accepteConditions, setAccepteConditions] = useState(true);
   const [erreur, setErreur] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [showFilieres, setShowFilieres] = useState(false);
 
-  const sInscrire = async () => {
+  const sInscrire = useCallback(async () => {
     setErreur('');
     if (!nom.trim() || !email.trim() || !motDePasse) {
       setErreur('Nom, e-mail et mot de passe sont obligatoires');
@@ -51,7 +52,7 @@ export default function RegisterScreen({ navigation }) {
         filiere: filiere.trim() || 'ISET Nabeul',
       });
       Alert.alert(
-        'Compte créé avec succès ! 🎉',
+        'Compte créé avec succès !',
         'Bienvenue sur UniRide. Vous pouvez dès à présent vous connecter.',
         [{ text: 'Se connecter', onPress: () => navigation.navigate('Login') }]
       );
@@ -60,67 +61,102 @@ export default function RegisterScreen({ navigation }) {
     } finally {
       setEnvoi(false);
     }
-  };
+  }, [nom, email, motDePasse, filiere, accepteConditions, navigation]);
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        {/* Bouton Retour en haut */}
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnArrow}>←</Text>
-        </TouchableOpacity>
+        {/* Header simple avec flèche retour */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={styles.backArrow}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.pageTitle}>Créer un compte</Text>
+        </View>
 
-        <Text style={styles.titre}>Nous rejoindre</Text>
-        <Text style={styles.sousTitre}>
-          Créez votre compte UniRide pour un campus plus vert et connecté.
+        <Text style={styles.subTitle}>
+          Rejoignez la communauté de covoiturage de l'ISET Nabeul.
         </Text>
 
         {erreur ? <Text style={styles.erreur}>{erreur}</Text> : null}
 
-        <Text style={styles.label}>NOM COMPLET</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex : Ahmed Ben Salem"
-          placeholderTextColor={colors.textLight}
-          value={nom}
-          onChangeText={setNom}
-        />
+        {/* Nom complet */}
+        <Text style={styles.fieldLabel}>Nom complet</Text>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputIcon}>👤</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: Ahmed Ben Salem"
+            placeholderTextColor={colors.textLight}
+            value={nom}
+            onChangeText={setNom}
+          />
+        </View>
 
-        <Text style={styles.label}>EMAIL UNIVERSITAIRE</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="nom.prenom@isetn.tn"
-          placeholderTextColor={colors.textLight}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-        <Text style={styles.aideDomain}>Domaine universitaire @isetn.tn recommandé</Text>
+        {/* Email universitaire */}
+        <Text style={styles.fieldLabel}>Email Universitaire (@isetn.tn)</Text>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputIcon}>✉</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="nom.prenom@isetn.tn"
+            placeholderTextColor={colors.textLight}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+        </View>
+        <Text style={styles.helperText}>Uniquement les emails de l'institut sont acceptés.</Text>
 
-        <Text style={styles.label}>FILIÈRE / DÉPARTEMENT</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex : DSI / TI / Génie Électrique"
-          placeholderTextColor={colors.textLight}
-          value={filiere}
-          onChangeText={setFiliere}
-        />
+        {/* Filière / Département */}
+        <Text style={styles.fieldLabel}>Filière / Département</Text>
+        <TouchableOpacity
+          style={styles.inputContainer}
+          onPress={() => setShowFilieres(!showFilieres)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.inputIcon}>🏛</Text>
+          <Text style={[styles.inputFake, !filiere && { color: colors.textLight }]}>
+            {filiere || 'Sélectionnez votre filière'}
+          </Text>
+          <Text style={styles.chevronIcon}>⌄</Text>
+        </TouchableOpacity>
 
-        <Text style={styles.label}>MOT DE PASSE</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="6 caractères minimum"
-          placeholderTextColor={colors.textLight}
-          value={motDePasse}
-          onChangeText={setMotDePasse}
-          secureTextEntry
-        />
+        {showFilieres && (
+          <View style={styles.dropdown}>
+            {FILIERES.map((f) => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.dropdownItem, filiere === f && styles.dropdownItemActive]}
+                onPress={() => { setFiliere(f); setShowFilieres(false); }}
+              >
+                <Text style={[styles.dropdownItemText, filiere === f && { color: colors.white }]}>
+                  {f}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-        {/* Checkbox Conditions d'utilisation */}
+        {/* Mot de passe */}
+        <Text style={styles.fieldLabel}>Mot de passe</Text>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputIcon}>🔒</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="••••••••"
+            placeholderTextColor={colors.textLight}
+            value={motDePasse}
+            onChangeText={setMotDePasse}
+            secureTextEntry
+          />
+        </View>
+
+        {/* Conditions */}
         <TouchableOpacity
           style={styles.checkboxRow}
           onPress={() => setAccepteConditions(!accepteConditions)}
@@ -130,13 +166,13 @@ export default function RegisterScreen({ navigation }) {
             {accepteConditions && <Text style={styles.checkboxCheck}>✓</Text>}
           </View>
           <Text style={styles.checkboxLabel}>
-            J'accepte les <Text style={{ fontWeight: 'bold' }}>Conditions d'Utilisation</Text> & la politique de
-            confidentialité du campus.
+            J'accepte les <Text style={styles.linkText}>Conditions d'Utilisation</Text> et la <Text style={styles.linkText}>Politique de Confidentialité</Text>.
           </Text>
         </TouchableOpacity>
 
+        {/* Bouton S'inscrire */}
         <TouchableOpacity
-          style={styles.bouton}
+          style={styles.btnPrimary}
           onPress={sInscrire}
           disabled={envoi}
           activeOpacity={0.85}
@@ -144,14 +180,15 @@ export default function RegisterScreen({ navigation }) {
           {envoi ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={styles.boutonTexte}>Créer mon compte</Text>
+            <Text style={styles.btnPrimaryText}>S'inscrire</Text>
           )}
         </TouchableOpacity>
 
-        <View style={styles.footerLinkRow}>
-          <Text style={styles.footerTexte}>Déjà un compte ? </Text>
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Déjà inscrit ?</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.footerLien}>Se connecter</Text>
+            <Text style={styles.loginLink}>Se connecter</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -162,72 +199,114 @@ export default function RegisterScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     padding: 24,
-    paddingTop: 40,
+    paddingTop: Platform.OS === 'ios' ? 54 : 36,
     backgroundColor: colors.background,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginRight: 10,
   },
-  backBtnArrow: {
-    fontSize: 20,
-    color: colors.primary,
-    fontWeight: 'bold',
-  },
-  titre: {
+  backArrow: {
     fontSize: 28,
-    fontWeight: '900',
-    color: colors.text,
-    letterSpacing: -0.5,
+    color: colors.primary,
+    fontWeight: '300',
   },
-  sousTitre: {
+  pageTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  subTitle: {
     fontSize: 14,
-    color: colors.textMuted,
-    lineHeight: 20,
-    marginTop: 4,
+    color: colors.textSecondary,
     marginBottom: 20,
+    lineHeight: 20,
   },
-  label: {
-    fontSize: 11,
+  fieldLabel: {
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
+    color: colors.text,
     marginBottom: 6,
+    marginTop: 4,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  inputIcon: {
+    fontSize: 16,
+    marginRight: 10,
+    color: colors.textMuted,
+  },
+  chevronIcon: {
+    fontSize: 16,
+    color: colors.textMuted,
+    marginLeft: 6,
   },
   input: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    flex: 1,
     paddingVertical: 13,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.text,
-    marginBottom: 12,
   },
-  aideDomain: {
+  inputFake: {
+    flex: 1,
+    paddingVertical: 13,
+    fontSize: 14,
+    color: colors.text,
+  },
+  helperText: {
     fontSize: 11,
-    color: colors.primary,
-    fontWeight: '600',
+    color: colors.textMuted,
     marginTop: -8,
     marginBottom: 12,
+    marginLeft: 4,
+  },
+  dropdown: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 12,
+    marginTop: -8,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  dropdownItemActive: {
+    backgroundColor: colors.primary,
+  },
+  dropdownItemText: {
+    fontSize: 13,
+    color: colors.text,
+    fontWeight: '500',
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 14,
+    marginVertical: 16,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 4,
     borderWidth: 2,
     borderColor: colors.border,
     justifyContent: 'center',
@@ -241,52 +320,53 @@ const styles = StyleSheet.create({
   },
   checkboxCheck: {
     color: colors.white,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 'bold',
   },
   checkboxLabel: {
     flex: 1,
     fontSize: 12,
-    color: colors.textMuted,
-    lineHeight: 16,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
-  bouton: {
+  linkText: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  btnPrimary: {
     backgroundColor: colors.primary,
     paddingVertical: 16,
-    borderRadius: 25,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 8,
     ...shadows.card,
   },
-  boutonTexte: {
+  btnPrimaryText: {
     color: colors.white,
     fontWeight: '800',
     fontSize: 16,
-    letterSpacing: 0.3,
   },
   erreur: {
     color: colors.danger,
     backgroundColor: colors.dangerLight,
-    padding: 10,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: radius.md,
     marginBottom: 14,
     textAlign: 'center',
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  footerLinkRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  footer: {
     alignItems: 'center',
-    marginTop: 24,
-    paddingBottom: 20,
+    paddingVertical: 24,
   },
-  footerTexte: {
+  footerText: {
     fontSize: 14,
     color: colors.textMuted,
+    marginBottom: 4,
   },
-  footerLien: {
+  loginLink: {
     fontSize: 14,
     fontWeight: '800',
     color: colors.primary,

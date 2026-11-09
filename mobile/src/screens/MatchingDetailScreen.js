@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ScrollView,
   View,
@@ -9,7 +9,7 @@ import {
   Image,
 } from 'react-native';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import UniHeader from '../components/UniHeader';
 
 export default function MatchingDetailScreen({ route, navigation }) {
@@ -35,7 +35,7 @@ export default function MatchingDetailScreen({ route, navigation }) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingTexte}>Calcul du score de compatibilité...</Text>
+        <Text style={styles.loadingTexte}>Calcul du score de compatibilit\u00e9...</Text>
       </View>
     );
   }
@@ -43,7 +43,7 @@ export default function MatchingDetailScreen({ route, navigation }) {
   if (!matchingData || !ride) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.erreurTexte}>Impossible de charger les détails du matching</Text>
+        <Text style={styles.erreurTexte}>Impossible de charger les d\u00e9tails du matching</Text>
         <TouchableOpacity style={styles.boutonRetour} onPress={() => navigation.goBack()}>
           <Text style={styles.boutonRetourTexte}>Retour</Text>
         </TouchableOpacity>
@@ -58,7 +58,7 @@ export default function MatchingDetailScreen({ route, navigation }) {
     <View style={styles.container}>
       <UniHeader
         title="Matching Intelligent"
-        subtitle="Algorithme ISET Nabeul (US11)"
+        subtitle="Algorithme ISET Nabeul"
         navigation={navigation}
         showBack={true}
       />
@@ -73,14 +73,14 @@ export default function MatchingDetailScreen({ route, navigation }) {
 
           <Text style={styles.heroTitre}>
             {scoreTotal >= 90
-              ? 'Compatibilité Optimale ! 🎉'
+              ? 'Compatibilit\u00e9 Optimale'
               : scoreTotal >= 75
-              ? 'Très Bonne Compatibilité 👍'
-              : 'Compatibilité Moyenne'}
+              ? 'Tr\u00e8s Bonne Compatibilit\u00e9'
+              : 'Compatibilit\u00e9 Moyenne'}
           </Text>
           <Text style={styles.heroDescription}>
-            Ce score sur 100 est calculé en croisant votre emploi du temps universitaire, votre point de
-            départ et vos affinités avec ce conducteur.
+            Ce score sur 100 est calcul\u00e9 en croisant votre emploi du temps universitaire, votre point de
+            d\u00e9part et vos affinit\u00e9s avec ce conducteur.
           </Text>
         </View>
 
@@ -100,7 +100,7 @@ export default function MatchingDetailScreen({ route, navigation }) {
             <View style={{ flex: 1 }}>
               <Text style={styles.driverName}>{conducteur?.nom || 'Conducteur ISET'}</Text>
               <Text style={styles.driverSub}>
-                🎓 {conducteur?.filiere || 'Étudiant ISET'} · ⭐ {(conducteur?.noteMoyenne || 4.8).toFixed(1)} / 5
+                {conducteur?.filiere || '\u00c9tudiant ISET'} \u00b7 \u2605 {(conducteur?.noteMoyenne || 4.8).toFixed(1)} / 5
               </Text>
             </View>
 
@@ -111,129 +111,51 @@ export default function MatchingDetailScreen({ route, navigation }) {
 
           <View style={styles.routeRow}>
             <Text style={styles.routeText} numberOfLines={1}>
-              🟢 {ride.depart?.label?.split(',')[0]} → 🔴 {ride.destination?.label?.split(',')[0]}
+              {ride.depart?.label?.split(',')[0]} \u2192 {ride.destination?.label?.split(',')[0]}
             </Text>
             <Text style={styles.timeText}>
-              ⏰ Départ {ride.heureDepart} · Arrivée {ride.heureArrivee}
+              D\u00e9part {ride.heureDepart} \u00b7 Arriv\u00e9e {ride.heureArrivee}
             </Text>
           </View>
         </View>
 
-        {/* Détail des 4 Critères du Cahier des Charges */}
-        <Text style={styles.sectionTitre}>Décomposition du score (Pondération officielle)</Text>
+        {/* D\u00e9tail des 4 Crit\u00e8res */}
+        <Text style={styles.sectionTitre}>D\u00c9COMPOSITION DU SCORE</Text>
 
-        {/* 1. Proximité du point de départ (35%) */}
-        {details?.proximite && (
-          <View style={styles.critereCard}>
-            <View style={styles.critereHeader}>
-              <View style={styles.critereIconBox}>
-                <Text style={styles.critereIcon}>📍</Text>
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={styles.critereTitreRow}>
-                  <Text style={styles.critereNom}>{details.proximite.titre}</Text>
-                  <Text style={styles.criterePts}>
-                    {details.proximite.pointsObtenus} / {details.proximite.poids} pts
-                  </Text>
+        {[
+          { key: 'proximite', data: details?.proximite, icon: 'P' },
+          { key: 'horaires', data: details?.horaires, icon: 'H' },
+          { key: 'preferences', data: details?.preferences, icon: 'A' },
+          { key: 'note', data: details?.note, icon: 'N' },
+        ].map((item) => {
+          if (!item.data) return null;
+          return (
+            <View key={item.key} style={styles.critereCard}>
+              <View style={styles.critereHeader}>
+                <View style={styles.critereIconBox}>
+                  <Text style={styles.critereIconText}>{item.icon}</Text>
                 </View>
-                {/* Barre de progression */}
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressBar,
-                      { width: `${details.proximite.scorePourcent}%` },
-                    ]}
-                  />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <View style={styles.critereTitreRow}>
+                    <Text style={styles.critereNom}>{item.data.titre}</Text>
+                    <Text style={styles.criterePts}>
+                      {item.data.pointsObtenus} / {item.data.poids} pts
+                    </Text>
+                  </View>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressBar,
+                        { width: `${item.data.scorePourcent}%` },
+                      ]}
+                    />
+                  </View>
                 </View>
               </View>
+              <Text style={styles.critereDesc}>{item.data.description}</Text>
             </View>
-            <Text style={styles.critereDesc}>{details.proximite.description}</Text>
-          </View>
-        )}
-
-        {/* 2. Concordance des horaires (35%) */}
-        {details?.horaires && (
-          <View style={styles.critereCard}>
-            <View style={styles.critereHeader}>
-              <View style={styles.critereIconBox}>
-                <Text style={styles.critereIcon}>⏰</Text>
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={styles.critereTitreRow}>
-                  <Text style={styles.critereNom}>{details.horaires.titre}</Text>
-                  <Text style={styles.criterePts}>
-                    {details.horaires.pointsObtenus} / {details.horaires.poids} pts
-                  </Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressBar,
-                      { width: `${details.horaires.scorePourcent}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-            </View>
-            <Text style={styles.critereDesc}>{details.horaires.description}</Text>
-          </View>
-        )}
-
-        {/* 3. Préférences communes (15%) */}
-        {details?.preferences && (
-          <View style={styles.critereCard}>
-            <View style={styles.critereHeader}>
-              <View style={styles.critereIconBox}>
-                <Text style={styles.critereIcon}>👥</Text>
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={styles.critereTitreRow}>
-                  <Text style={styles.critereNom}>{details.preferences.titre}</Text>
-                  <Text style={styles.criterePts}>
-                    {details.preferences.pointsObtenus} / {details.preferences.poids} pts
-                  </Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressBar,
-                      { width: `${details.preferences.scorePourcent}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-            </View>
-            <Text style={styles.critereDesc}>{details.preferences.description}</Text>
-          </View>
-        )}
-
-        {/* 4. Note du conducteur (15%) */}
-        {details?.note && (
-          <View style={styles.critereCard}>
-            <View style={styles.critereHeader}>
-              <View style={styles.critereIconBox}>
-                <Text style={styles.critereIcon}>⭐</Text>
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={styles.critereTitreRow}>
-                  <Text style={styles.critereNom}>{details.note.titre}</Text>
-                  <Text style={styles.criterePts}>
-                    {details.note.pointsObtenus} / {details.note.poids} pts
-                  </Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressBar,
-                      { width: `${details.note.scorePourcent}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-            </View>
-            <Text style={styles.critereDesc}>{details.note.description}</Text>
-          </View>
-        )}
+          );
+        })}
 
         {/* Bouton d'action */}
         <TouchableOpacity
@@ -241,7 +163,7 @@ export default function MatchingDetailScreen({ route, navigation }) {
           onPress={() => navigation.navigate('RideDetail', { id })}
           activeOpacity={0.85}
         >
-          <Text style={styles.boutonActionTexte}>Voir l'itinéraire & Réserver une place</Text>
+          <Text style={styles.boutonActionTexte}>Voir l'itin\u00e9raire & R\u00e9server</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -275,7 +197,7 @@ const styles = StyleSheet.create({
   boutonRetour: {
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 20,
+    borderRadius: radius.full,
     backgroundColor: colors.primary,
   },
   boutonRetourTexte: {
@@ -288,27 +210,27 @@ const styles = StyleSheet.create({
   },
   heroScoreCard: {
     backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: radius.lg,
+    padding: 22,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#DBEAFE',
     ...shadows.card,
   },
   scoreCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: colors.badgeGoldBg,
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: '#FDE047',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   scoreCircleNumber: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '900',
     color: colors.badgeGoldText,
   },
@@ -327,15 +249,15 @@ const styles = StyleSheet.create({
   },
   heroDescription: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 17,
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.borderLight,
     ...shadows.card,
@@ -379,7 +301,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: radius.sm,
   },
   priceAmount: {
     fontSize: 15,
@@ -387,8 +309,8 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   routeRow: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.md,
     padding: 10,
   },
   routeText: {
@@ -403,18 +325,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   sectionTitre: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: colors.textMuted,
-    textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   critereCard: {
     backgroundColor: colors.card,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: radius.md,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.borderLight,
     ...shadows.card,
@@ -425,15 +346,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   critereIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  critereIcon: {
-    fontSize: 18,
+  critereIconText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: colors.primary,
   },
   critereTitreRow: {
     flexDirection: 'row',
@@ -453,7 +376,7 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.inputBg,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -464,18 +387,19 @@ const styles = StyleSheet.create({
   },
   critereDesc: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     lineHeight: 16,
     marginTop: 2,
   },
   boutonAction: {
     backgroundColor: colors.primary,
     paddingVertical: 16,
-    borderRadius: 25,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
-    ...shadows.card,
+    marginTop: 8,
+    marginBottom: 20,
+    ...shadows.elevated,
   },
   boutonActionTexte: {
     color: colors.white,
@@ -484,4 +408,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 });
-

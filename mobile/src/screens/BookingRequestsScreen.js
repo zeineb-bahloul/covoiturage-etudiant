@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import UniHeader from '../components/UniHeader';
 
 export default function BookingRequestsScreen({ route, navigation }) {
@@ -29,7 +29,7 @@ export default function BookingRequestsScreen({ route, navigation }) {
       const { data } = await api.get('/bookings/requests', { params });
       setDemandes(data);
     } catch (err) {
-      Alert.alert('Erreur', 'Impossible de charger les demandes de réservation');
+      Alert.alert('Erreur', 'Impossible de charger les demandes de r\u00e9servation');
     } finally {
       setChargement(false);
       setRafraichir(false);
@@ -42,21 +42,21 @@ export default function BookingRequestsScreen({ route, navigation }) {
     }, [charger])
   );
 
-  const accepter = async (id) => {
+  const accepter = useCallback(async (id) => {
     setActionEnCours(id);
     try {
       await api.patch(`/bookings/${id}/accept`);
-      Alert.alert('Succès', 'Demande de réservation acceptée !');
+      Alert.alert('Succ\u00e8s', 'Demande de r\u00e9servation accept\u00e9e !');
       charger();
     } catch (err) {
       Alert.alert('Erreur', err.response?.data?.message || "Impossible d'accepter la demande");
     } finally {
       setActionEnCours(null);
     }
-  };
+  }, [charger]);
 
-  const refuser = (id) => {
-    Alert.alert('Refuser la demande', 'Êtes-vous sûr de vouloir refuser cette réservation ?', [
+  const refuser = useCallback((id) => {
+    Alert.alert('Refuser la demande', '\u00cates-vous s\u00fbr de vouloir refuser cette r\u00e9servation ?', [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Oui, refuser',
@@ -74,20 +74,135 @@ export default function BookingRequestsScreen({ route, navigation }) {
         },
       },
     ]);
-  };
+  }, [charger]);
 
   const demandesFiltrees = demandes.filter((d) => d.statut === onglet);
-
   const nbEnAttente = demandes.filter((d) => d.statut === 'en_attente').length;
   const nbAcceptees = demandes.filter((d) => d.statut === 'acceptee').length;
   const nbRefusees = demandes.filter((d) => d.statut === 'refusee').length;
 
-  // Calcul des statistiques pour la capsule du bas
   const totalGains = demandes
     .filter((d) => d.statut === 'acceptee')
     .reduce((somme, d) => somme + (d.trajet?.prix || 0) * (d.places || 1), 0);
 
-  const totalPlacesPrises = nbAcceptees;
+  const renderItem = useCallback(({ item }) => {
+    const passager = item.passager;
+    const trajet = item.trajet;
+    const estEnCours = actionEnCours === item._id;
+
+    return (
+      <View style={styles.card}>
+        {/* En-t\u00eate trajet */}
+        {trajet && (
+          <View style={styles.trajetHeader}>
+            <Text style={styles.trajetTitre} numberOfLines={1}>
+              TRAJET : {trajet.depart?.label?.split(',')[0]} \u2192 {trajet.destination?.label?.split(',')[0]} ({trajet.heureDepart})
+            </Text>
+            <Text style={styles.trajetPrix}>{trajet.prix} DT</Text>
+          </View>
+        )}
+
+        {/* Info passager */}
+        <View style={styles.passengerRow}>
+          {passager?.photo ? (
+            <Image source={{ uri: passager.photo }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>{passager?.nom ? passager.nom[0].toUpperCase() : 'P'}</Text>
+            </View>
+          )}
+
+          <View style={styles.passengerInfo}>
+            <View style={styles.nameMatchRow}>
+              <Text style={styles.passengerName} numberOfLines={1}>
+                {passager?.nom || '\u00c9tudiant'}
+              </Text>
+              <View style={styles.badgeMatch}>
+                <Text style={styles.badgeMatchTexte}>{item.scoreMatch || 91}% MATCH</Text>
+              </View>
+            </View>
+
+            <Text style={styles.filiereText} numberOfLines={1}>
+              {passager?.filiere || 'ISET Nabeul'}
+            </Text>
+
+            <Text style={styles.placesDemandees}>
+              Places : <Text style={{ fontWeight: 'bold' }}>{item.places}</Text>
+            </Text>
+          </View>
+        </View>
+
+        {/* Bulle message */}
+        {item.message ? (
+          <View style={styles.quoteBubble}>
+            <Text style={styles.quoteText}>\u201C{item.message}\u201D</Text>
+          </View>
+        ) : null}
+
+        {/* Actions selon statut */}
+        {item.statut === 'en_attente' && (
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity
+              style={styles.boutonRefuser}
+              onPress={() => refuser(item._id)}
+              disabled={estEnCours}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.boutonRefuserTexte}>Refuser</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.boutonAccepter}
+              onPress={() => accepter(item._id)}
+              disabled={estEnCours}
+              activeOpacity={0.85}
+            >
+              {estEnCours ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Text style={styles.boutonAccepterTexte}>Accepter</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {item.statut === 'acceptee' && (
+          <View style={{ marginTop: 10 }}>
+            <View style={styles.statusConfirmRow}>
+              <Text style={styles.statusConfirmTexte}>Place confirm\u00e9e</Text>
+              <TouchableOpacity onPress={() => refuser(item._id)}>
+                <Text style={styles.annulerLien}>Annuler</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.boutonContacterPassager}
+              onPress={() =>
+                navigation.navigate('Chat', {
+                  destinataireId: passager?._id,
+                  contactNom: passager?.nom,
+                  contactPhoto: passager?.photo,
+                  contactFiliere: passager?.filiere,
+                  trajetTitre: trajet ? `${trajet.depart?.label?.split(',')[0]} \u2192 ${trajet.destination?.label?.split(',')[0]}` : '',
+                })
+              }
+              activeOpacity={0.8}
+            >
+              <Text style={styles.boutonContacterPassagerTexte}>
+                Discuter avec le passager
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {item.statut === 'refusee' && (
+          <View style={styles.statusRefuseRow}>
+            <Text style={styles.statusRefuseTexte}>Demande d\u00e9clin\u00e9e</Text>
+          </View>
+        )}
+      </View>
+    );
+  }, [actionEnCours, refuser, accepter, navigation]);
 
   if (chargement) {
     return (
@@ -100,7 +215,7 @@ export default function BookingRequestsScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       <UniHeader
-        title="Demandes de réservation"
+        title="Demandes de r\u00e9servation"
         subtitle="Gestion des passagers"
         navigation={navigation}
         showBack={true}
@@ -122,7 +237,7 @@ export default function BookingRequestsScreen({ route, navigation }) {
           onPress={() => setOnglet('acceptee')}
         >
           <Text style={[styles.tabTexte, onglet === 'acceptee' && styles.tabTexteActif]}>
-            Acceptées ({nbAcceptees})
+            Accept\u00e9es ({nbAcceptees})
           </Text>
         </TouchableOpacity>
 
@@ -131,7 +246,7 @@ export default function BookingRequestsScreen({ route, navigation }) {
           onPress={() => setOnglet('refusee')}
         >
           <Text style={[styles.tabTexte, onglet === 'refusee' && styles.tabTexteActif]}>
-            Refusées ({nbRefusees})
+            Refus\u00e9es ({nbRefusees})
           </Text>
         </TouchableOpacity>
       </View>
@@ -140,6 +255,7 @@ export default function BookingRequestsScreen({ route, navigation }) {
         data={demandesFiltrees}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
+        renderItem={renderItem}
         refreshControl={
           <RefreshControl
             refreshing={rafraichir}
@@ -152,142 +268,30 @@ export default function BookingRequestsScreen({ route, navigation }) {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🚗</Text>
-            <Text style={styles.emptyTitle}>Aucune demande {onglet === 'en_attente' ? 'en attente' : onglet}</Text>
+            <View style={styles.emptyIconBox}>
+              <Text style={styles.emptyIconText}>\u2022</Text>
+            </View>
+            <Text style={styles.emptyTitle}>
+              Aucune demande {onglet === 'en_attente' ? 'en attente' : onglet}
+            </Text>
             <Text style={styles.emptySub}>
               {onglet === 'en_attente'
-                ? 'Les réservations de vos passagers apparaîtront ici dès qu’ils réserveront une place.'
-                : 'Historique des demandes classées.'}
+                ? 'Les r\u00e9servations de vos passagers appara\u00eetront ici.'
+                : 'Historique des demandes class\u00e9es.'}
             </Text>
           </View>
         }
-        renderItem={({ item }) => {
-          const passager = item.passager;
-          const trajet = item.trajet;
-          const estEnCours = actionEnCours === item._id;
-
-          return (
-            <View style={styles.card}>
-              {/* Entête du trajet */}
-              {trajet && (
-                <View style={styles.trajetHeader}>
-                  <Text style={styles.trajetTitre} numberOfLines={1}>
-                    TRAJET : {trajet.depart?.label?.split(',')[0]} → {trajet.destination?.label?.split(',')[0]} (
-                    {trajet.heureDepart})
-                  </Text>
-                  <Text style={styles.trajetPrix}>{trajet.prix} DT</Text>
-                </View>
-              )}
-
-              {/* Infos Passager */}
-              <View style={styles.passengerRow}>
-                {passager?.photo ? (
-                  <Image source={{ uri: passager.photo }} style={styles.avatar} />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarText}>{passager?.nom ? passager.nom[0].toUpperCase() : 'P'}</Text>
-                  </View>
-                )}
-
-                <View style={styles.passengerInfo}>
-                  <View style={styles.nameMatchRow}>
-                    <Text style={styles.passengerName} numberOfLines={1}>
-                      {passager?.nom || 'Étudiant'}
-                    </Text>
-                    <View style={styles.badgeMatch}>
-                      <Text style={styles.badgeMatchTexte}>{item.scoreMatch || 91}% MATCH</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.filiereText} numberOfLines={1}>
-                    🎓 {passager?.filiere || 'Étudiant ISET Nabeul'}
-                  </Text>
-
-                  <Text style={styles.placesDemandees}>
-                    Nombre de places demandées : <Text style={{ fontWeight: 'bold' }}>{item.places}</Text>
-                  </Text>
-                </View>
-              </View>
-
-              {/* Bulle de citation / Message passager */}
-              {item.message ? (
-                <View style={styles.quoteBubble}>
-                  <Text style={styles.quoteText}>“{item.message}”</Text>
-                </View>
-              ) : null}
-
-              {/* Boutons d'action Refuser / Accepter (Style fidèle à l'image 3) */}
-              {item.statut === 'en_attente' && (
-                <View style={styles.actionButtonsRow}>
-                  <TouchableOpacity
-                    style={styles.boutonRefuser}
-                    onPress={() => refuser(item._id)}
-                    disabled={estEnCours}
-                  >
-                    <Text style={styles.boutonRefuserTexte}>Refuser</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.boutonAccepter}
-                    onPress={() => accepter(item._id)}
-                    disabled={estEnCours}
-                  >
-                    {estEnCours ? (
-                      <ActivityIndicator size="small" color={colors.white} />
-                    ) : (
-                      <Text style={styles.boutonAccepterTexte}>Accepter</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {item.statut === 'acceptee' && (
-                <View style={{ marginTop: 8 }}>
-                  <View style={styles.statusConfirmRow}>
-                    <Text style={styles.statusConfirmTexte}>✓ Demande acceptée (Place réservée)</Text>
-                    <TouchableOpacity onPress={() => refuser(item._id)}>
-                      <Text style={styles.annulerLien}>Annuler</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.boutonContacterPassager}
-                    onPress={() =>
-                      navigation.navigate('Chat', {
-                        destinataireId: passager?._id,
-                        contactNom: passager?.nom,
-                        contactPhoto: passager?.photo,
-                        contactFiliere: passager?.filiere,
-                        trajetTitre: trajet ? `${trajet.depart?.label?.split(',')[0]} → ${trajet.destination?.label?.split(',')[0]}` : '',
-                      })
-                    }
-                  >
-                    <Text style={styles.boutonContacterPassagerTexte}>
-                      💬 Discuter pour fixer le point de rendez-vous
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {item.statut === 'refusee' && (
-                <View style={styles.statusRefuseRow}>
-                  <Text style={styles.statusRefuseTexte}>✕ Demande déclinée</Text>
-                </View>
-              )}
-            </View>
-          );
-        }}
       />
 
       {/* Capsule d'information flottante (Image 3 de la maquette) */}
       <View style={styles.darkCapsuleBar}>
         <View style={styles.capsuleItem}>
-          <Text style={styles.capsuleLabel}>ACCEPTÉES</Text>
-          <Text style={styles.capsuleValeur}>{totalPlacesPrises} PASSAGER(S)</Text>
+          <Text style={styles.capsuleLabel}>PLACES LIBRES</Text>
+          <Text style={styles.capsuleValeur}>{nbAcceptees} OCCUP\u00c9E(S)</Text>
         </View>
         <View style={styles.capsuleDivider} />
         <View style={styles.capsuleItem}>
-          <Text style={styles.capsuleLabel}>GAINS ESTIMÉS</Text>
+          <Text style={styles.capsuleLabel}>GAINS ESTIM\u00c9S</Text>
           <Text style={styles.capsuleValeur}>{totalGains.toFixed(1)} DT</Text>
         </View>
       </View>
@@ -309,18 +313,17 @@ const styles = StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     backgroundColor: colors.card,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
-    justifyContent: 'space-between',
+    gap: 8,
   },
   tabPill: {
     flex: 1,
-    marginHorizontal: 4,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: colors.background,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.inputBg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -331,7 +334,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   tabTexte: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.textMuted,
   },
@@ -344,9 +347,9 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: colors.borderLight,
     ...shadows.card,
@@ -355,8 +358,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 10,
-    marginBottom: 12,
+    paddingBottom: 8,
+    marginBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
@@ -369,7 +372,7 @@ const styles = StyleSheet.create({
   },
   trajetPrix: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
     color: colors.primary,
     marginLeft: 8,
   },
@@ -378,23 +381,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     marginRight: 12,
-    backgroundColor: colors.borderLight,
   },
   avatarPlaceholder: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   avatarText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: colors.primary,
   },
@@ -405,10 +407,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   passengerName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.text,
     flex: 1,
@@ -418,13 +420,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.badgeGoldBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: radius.sm,
   },
   badgeMatchTexte: {
     color: colors.badgeGoldText,
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
   filiereText: {
     fontSize: 12,
@@ -433,37 +434,37 @@ const styles = StyleSheet.create({
   },
   placesDemandees: {
     fontSize: 12,
-    color: colors.text,
+    color: colors.textSecondary,
   },
   quoteBubble: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 12,
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.md,
+    padding: 10,
+    marginTop: 10,
     borderLeftWidth: 3,
     borderLeftColor: colors.primary,
   },
   quoteText: {
-    fontSize: 13,
-    color: colors.text,
+    fontSize: 12,
+    color: colors.textSecondary,
     fontStyle: 'italic',
     lineHeight: 18,
   },
   actionButtonsRow: {
     flexDirection: 'row',
-    marginTop: 16,
+    marginTop: 14,
     alignItems: 'center',
+    gap: 10,
   },
   boutonRefuser: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: colors.background,
+    borderRadius: radius.full,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    marginRight: 10,
   },
   boutonRefuserTexte: {
     color: colors.danger,
@@ -472,10 +473,10 @@ const styles = StyleSheet.create({
   },
   boutonAccepter: {
     flex: 2,
-    paddingVertical: 12,
+    paddingVertical: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: radius.full,
     backgroundColor: colors.primary,
     ...shadows.card,
   },
@@ -489,9 +490,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: colors.successLight,
-    padding: 12,
-    borderRadius: 14,
-    marginTop: 14,
+    padding: 10,
+    borderRadius: radius.md,
   },
   statusConfirmTexte: {
     color: colors.success,
@@ -506,8 +506,8 @@ const styles = StyleSheet.create({
   statusRefuseRow: {
     backgroundColor: colors.dangerLight,
     padding: 10,
-    borderRadius: 14,
-    marginTop: 12,
+    borderRadius: radius.md,
+    marginTop: 10,
     alignItems: 'center',
   },
   statusRefuseTexte: {
@@ -516,12 +516,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   boutonContacterPassager: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    backgroundColor: colors.primaryLight,
     paddingVertical: 9,
     paddingHorizontal: 12,
-    borderRadius: 14,
+    borderRadius: radius.md,
     alignItems: 'center',
     marginTop: 8,
   },
@@ -536,15 +534,24 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
     paddingHorizontal: 24,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  emptyIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emptyIconText: {
+    fontSize: 24,
+    color: colors.primary,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   emptySub: {
@@ -561,7 +568,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.darkCapsule,
     borderRadius: 30,
     flexDirection: 'row',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -577,15 +584,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   capsuleValeur: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     color: colors.white,
     marginTop: 2,
   },
   capsuleDivider: {
     width: 1,
-    height: 24,
+    height: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
 });
-

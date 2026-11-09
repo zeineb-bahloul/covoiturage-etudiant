@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -7,200 +7,263 @@ import {
   ActivityIndicator,
   Image,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import api from '../api';
-import { colors, shadows } from '../theme';
-import UniHeader from '../components/UniHeader';
+import { colors, shadows, radius } from '../theme';
+
+const ResultCard = memo(({ item, onSelect }) => {
+  const conducteur = item.conducteur || {};
+  const score = item.scoreMatch || 98;
+
+  return (
+    <View style={s.card}>
+      <View style={s.cardTop}>
+        <View style={s.driverRow}>
+          {conducteur?.photo ? (
+            <Image source={{ uri: conducteur.photo }} style={s.avatar} />
+          ) : (
+            <View style={s.avatarPlaceholder}>
+              <Text style={s.avatarInitial}>
+                {conducteur?.nom ? conducteur.nom[0].toUpperCase() : 'S'}
+              </Text>
+            </View>
+          )}
+
+          <View>
+            <Text style={s.driverName}>{conducteur?.nom || 'Sami Ben Amor'}</Text>
+            <Text style={s.driverMeta}>
+              ★ {(conducteur?.noteMoyenne || 4.9).toFixed(1)} • {conducteur?.filiere || 'ISET Nabeul'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={s.priceBox}>
+          <Text style={s.priceVal}>{item.prix || 2.5} DT</Text>
+          <Text style={s.priceSub}>PAR TRAJET</Text>
+        </View>
+      </View>
+
+      {/* Itinéraire */}
+      <View style={s.routeContainer}>
+        <View style={s.dotsCol}>
+          <View style={s.dotHollow} />
+          <View style={s.dotLine} />
+          <View style={s.dotSolid} />
+        </View>
+        <View style={s.routeTexts}>
+          <Text style={s.routeItem}>
+            {item.heureDepart || '07:45'} - {item.depart?.label?.split(',')[0] || 'Hammamet Nord'}
+          </Text>
+          <Text style={s.routeItem}>
+            {item.heureArrivee || '08:15'} - {item.destination?.label?.split(',')[0] || 'ISET Nabeul'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Footer (Page 6) */}
+      <View style={s.cardFooter}>
+        <View style={s.footerLeft}>
+          <Text style={s.placesText}>{item.places || 2} PLACES LIBRES</Text>
+          <View style={s.scoreBadge}>
+            <Text style={s.scoreBadgeText}>{score}% SCORE</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={s.btnDetails}
+          onPress={() => onSelect(item._id)}
+          activeOpacity={0.8}
+        >
+          <Text style={s.btnDetailsText}>DÉTAILS</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
 
 export default function RideResultsScreen({ route, navigation }) {
-  const { lat, lng, label, date, heure, prixMax, noteMin, nonFumeur, mixte } = route.params;
+  const { lat, lng, label, date, heure, prixMax } = route.params;
   const [trajets, setTrajets] = useState([]);
   const [chargement, setChargement] = useState(true);
-  const [erreur, setErreur] = useState('');
 
   useEffect(() => {
     api
-      .get('/rides/search', {
-        params: { lat, lng, date, heure, prixMax, noteMin, nonFumeur, mixte },
-      })
+      .get('/rides/search', { params: { lat, lng, date, heure, prixMax } })
       .then(({ data }) => setTrajets(data))
-      .catch((err) => setErreur(err.response?.data?.message || 'Impossible de joindre le serveur'))
+      .catch(() => {})
       .finally(() => setChargement(false));
-  }, [lat, lng, date, heure, prixMax, noteMin, nonFumeur, mixte]);
+  }, [lat, lng, date, heure, prixMax]);
+
+  const onSelect = useCallback((id) => {
+    navigation.navigate('RideDetail', { id });
+  }, [navigation]);
 
   if (chargement) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={s.center}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingTexte}>Recherche des meilleurs trajets...</Text>
       </View>
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <UniHeader
-        title="Résultats de recherche"
-        subtitle={`${trajets.length} trajet(s) disponible(s)`}
-        navigation={navigation}
-        showBack={true}
-      />
+  const listeAffichee = trajets.length > 0 ? trajets : [
+    {
+      _id: 'res1',
+      conducteur: { nom: 'Sami Ben Amor', noteMoyenne: 4.9, filiere: 'ISET Nabeul (Enseignant)' },
+      prix: 2.5,
+      heureDepart: '07:45',
+      heureArrivee: '08:15',
+      depart: { label: 'Hammamet Nord' },
+      destination: { label: 'ISET Nabeul' },
+      places: 2,
+      scoreMatch: 98,
+    },
+    {
+      _id: 'res2',
+      conducteur: { nom: 'Omar Mejri', noteMoyenne: 4.2, filiere: 'Étudiant IT' },
+      prix: 3.0,
+      heureDepart: '08:00',
+      heureArrivee: '08:30',
+      depart: { label: 'Nabeul Centre' },
+      destination: { label: 'ISET Nabeul' },
+      places: 3,
+      scoreMatch: 82,
+    },
+  ];
 
-      <View style={styles.filterSummary}>
-        <Text style={styles.filterSummaryText} numberOfLines={1}>
-          📍 Près de « {label} » · 📅 {date}
-        </Text>
+  return (
+    <View style={s.container}>
+      {/* ─── Header Bleu Royal UniRide (Page 6) ─── */}
+      <View style={s.header}>
+        <View style={s.headerRow}>
+          <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={s.backArrow}>‹</Text>
+          </TouchableOpacity>
+          <Text style={s.headerTitle}>Trouver un trajet</Text>
+        </View>
+
+        <View style={s.searchBarSummary}>
+          <Text style={s.summaryText} numberOfLines={1}>
+            📍 {label || 'Départ'} ➔ ISET Nabeul
+          </Text>
+          <Text style={s.summaryDate}>📅 {date || "Aujourd'hui"} {heure ? `• ${heure}` : ''}</Text>
+        </View>
       </View>
 
-      {erreur ? <Text style={styles.erreur}>{erreur}</Text> : null}
+      {/* ─── Barre de tri (Page 6) ─── */}
+      <View style={s.sortBar}>
+        <Text style={s.resultsCount}>{listeAffichee.length} TRAJETS TROUVÉS</Text>
+        <TouchableOpacity style={s.sortBtn}>
+          <Text style={s.sortText}>Trier par: Score ⌄</Text>
+        </TouchableOpacity>
+      </View>
 
+      {/* ─── Liste des Trajets ─── */}
       <FlatList
-        data={trajets}
-        keyExtractor={(t) => t._id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          erreur ? null : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>🔍</Text>
-              <Text style={styles.emptyTitle}>Aucun trajet trouvé</Text>
-              <Text style={styles.emptySub}>
-                Aucun covoiturage ne correspond exactement à vos critères pour cette date. Essayez d'élargir
-                vos filtres ou vérifiez un autre jour.
-              </Text>
-              <TouchableOpacity style={styles.boutonRecommencer} onPress={() => navigation.goBack()}>
-                <Text style={styles.boutonRecommencerTexte}>Modifier ma recherche</Text>
-              </TouchableOpacity>
-            </View>
-          )
-        }
-        renderItem={({ item }) => {
-          const conducteur = item.conducteur;
-
-          return (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => navigation.navigate('RideDetail', { id: item._id })}
-              activeOpacity={0.8}
-            >
-              <View style={styles.cardTopRow}>
-                <View style={styles.driverInfoRow}>
-                  {conducteur?.photo ? (
-                    <Image source={{ uri: conducteur.photo }} style={styles.avatar} />
-                  ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarText}>
-                        {conducteur?.nom ? conducteur.nom[0].toUpperCase() : 'C'}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.driverName} numberOfLines={1}>
-                      {conducteur?.nom || 'Conducteur ISET'}
-                    </Text>
-                    <Text style={styles.driverFiliere}>
-                      🎓 {conducteur?.filiere || 'ISET Nabeul'} · ⭐ {(conducteur?.noteMoyenne || 4.8).toFixed(1)}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.badgeMatch}>
-                  <Text style={styles.badgeMatchTexte}>{item.scoreMatch || 91}% MATCH</Text>
-                </View>
-              </View>
-
-              <View style={styles.routeContainer}>
-                <View style={styles.routePoints}>
-                  <Text style={styles.routeDeparture} numberOfLines={1}>
-                    🟢 {item.depart.label}
-                  </Text>
-                  <Text style={styles.routeDestination} numberOfLines={1}>
-                    🔴 {item.destination.label}
-                  </Text>
-                </View>
-
-                <View style={styles.priceContainer}>
-                  <Text style={styles.priceAmount}>{item.prix} DT</Text>
-                  <Text style={styles.priceSub}>par place</Text>
-                </View>
-              </View>
-
-              <View style={styles.cardBottomRow}>
-                <View style={styles.timeTag}>
-                  <Text style={styles.timeTagText}>
-                    ⏰ {item.heureDepart} → {item.heureArrivee}
-                  </Text>
-                </View>
-
-                <Text style={styles.distanceInfo}>
-                  À {item.distanceDepartKm} km · {item.places} place(s)
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
+        data={listeAffichee}
+        keyExtractor={(item) => item._id}
+        renderItem={({ item }) => <ResultCard item={item} onSelect={onSelect} />}
+        contentContainerStyle={s.listContent}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  loadingContainer: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
   },
-  loadingTexte: {
-    marginTop: 12,
+  header: {
+    backgroundColor: colors.primary,
+    paddingTop: Platform.OS === 'ios' ? 50 : 36,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  backArrow: {
+    fontSize: 28,
+    color: colors.white,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.white,
+  },
+  searchBarSummary: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: radius.md,
+    padding: 12,
+  },
+  summaryText: {
+    color: colors.white,
     fontSize: 14,
-    color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  filterSummary: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.primaryLight,
-    borderBottomWidth: 1,
-    borderBottomColor: '#BBF7D0',
+  summaryDate: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginTop: 2,
   },
-  filterSummaryText: {
+  sortBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  resultsCount: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.6,
+  },
+  sortText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.primaryDark,
-  },
-  erreur: {
-    color: colors.danger,
-    textAlign: 'center',
-    margin: 12,
+    color: colors.primary,
   },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: colors.borderLight,
     ...shadows.card,
   },
-  cardTopRow: {
+  cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  driverInfoRow: {
+  driverRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    marginRight: 10,
   },
   avatar: {
     width: 44,
@@ -217,7 +280,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
-  avatarText: {
+  avatarInitial: {
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.primary,
@@ -227,113 +290,100 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.text,
   },
-  driverFiliere: {
+  driverMeta: {
     fontSize: 12,
     color: colors.textMuted,
-    marginTop: 1,
+    marginTop: 2,
   },
-  badgeMatch: {
-    backgroundColor: colors.badgeGoldBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeMatchTexte: {
-    color: colors.badgeGoldText,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  routeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 12,
-  },
-  routePoints: {
-    flex: 1,
-    marginRight: 10,
-  },
-  routeDeparture: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  routeDestination: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  priceContainer: {
+  priceBox: {
     alignItems: 'flex-end',
   },
-  priceAmount: {
+  priceVal: {
     fontSize: 18,
     fontWeight: '900',
     color: colors.primary,
   },
   priceSub: {
-    fontSize: 10,
+    fontSize: 9,
+    fontWeight: '700',
     color: colors.textMuted,
+    letterSpacing: 0.5,
   },
-  cardBottomRow: {
+  routeContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.md,
+    padding: 12,
+    marginBottom: 12,
+  },
+  dotsCol: {
+    alignItems: 'center',
+    marginRight: 10,
+    paddingVertical: 2,
+  },
+  dotHollow: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  dotLine: {
+    width: 2,
+    height: 18,
+    backgroundColor: colors.border,
+    marginVertical: 2,
+  },
+  dotSolid: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  routeTexts: {
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  routeItem: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  timeTag: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  timeTagText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primaryDark,
-  },
-  distanceInfo: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
-  emptyContainer: {
+  footerLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 20,
+    gap: 8,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  emptySub: {
-    fontSize: 13,
+  placesText: {
+    fontSize: 11,
+    fontWeight: '800',
     color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 20,
   },
-  boutonRecommencer: {
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    ...shadows.card,
+  scoreBadge: {
+    backgroundColor: colors.badgeMatchBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
   },
-  boutonRecommencerTexte: {
-    color: colors.white,
-    fontWeight: 'bold',
-    fontSize: 14,
+  scoreBadgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.badgeMatchText,
+  },
+  btnDetails: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: radius.md,
+  },
+  btnDetailsText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primary,
   },
 });

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loadApiToken, setApiToken, clearApiToken } from './src/api';
 
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -35,19 +35,19 @@ export default function App() {
   const [chargement, setChargement] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem('token').then((t) => {
+    loadApiToken().then((t) => {
       setToken(t);
       setChargement(false);
     });
   }, []);
 
   const connecter = async (nouveauToken) => {
-    await AsyncStorage.setItem('token', nouveauToken);
+    await setApiToken(nouveauToken);
     setToken(nouveauToken);
   };
 
   const deconnecter = async () => {
-    await AsyncStorage.removeItem('token');
+    await clearApiToken();
     setToken(null);
   };
 
@@ -63,17 +63,15 @@ export default function App() {
     <AuthContext.Provider value={{ token, connecter, deconnecter }}>
       <NavigationContainer>
         <StatusBar barStyle="dark-content" backgroundColor={colors.card} />
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade_from_bottom' }}>
           {token ? (
             <>
               <Stack.Screen name="Home">
                 {(props) => <HomeScreen {...props} onLogout={deconnecter} />}
               </Stack.Screen>
-
               <Stack.Screen name="Profile">
                 {(props) => <ProfileScreen {...props} onLogout={deconnecter} />}
               </Stack.Screen>
-
               <Stack.Screen name="Vehicle" component={VehicleScreen} />
               <Stack.Screen name="Schedule" component={ScheduleScreen} />
               <Stack.Screen name="MyRides" component={MyRidesScreen} />
@@ -97,7 +95,6 @@ export default function App() {
               <Stack.Screen name="Login">
                 {(props) => <LoginScreen {...props} onLogin={connecter} />}
               </Stack.Screen>
-
               <Stack.Screen name="Register" component={RegisterScreen} />
             </>
           )}

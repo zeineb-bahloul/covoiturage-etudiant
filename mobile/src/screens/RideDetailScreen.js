@@ -10,10 +10,11 @@ import {
   Image,
   StyleSheet,
   Modal,
+  Platform,
 } from 'react-native';
 import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 import api from '../api';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 import UniHeader from '../components/UniHeader';
 
 export default function RideDetailScreen({ route, navigation }) {
@@ -51,9 +52,9 @@ export default function RideDetailScreen({ route, navigation }) {
     chargerTrajet();
   }, [chargerTrajet]);
 
-  const ajusterCarte = () => {
+  const ajusterCarte = useCallback(() => {
     if (!ride) return;
-    const points = ride.itineraire.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
+    const points = (ride.itineraire || []).map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
     const [lngD, latD] = ride.depart.location.coordinates;
     const [lngA, latA] = ride.destination.location.coordinates;
     mapRef.current?.fitToCoordinates(
@@ -63,9 +64,9 @@ export default function RideDetailScreen({ route, navigation }) {
         animated: true,
       }
     );
-  };
+  }, [ride]);
 
-  const reserver = async () => {
+  const reserver = useCallback(async () => {
     setEnvoiReservation(true);
     try {
       const { data } = await api.post('/bookings', {
@@ -86,9 +87,9 @@ export default function RideDetailScreen({ route, navigation }) {
     } finally {
       setEnvoiReservation(false);
     }
-  };
+  }, [id, placesVoulues, message, chargerTrajet]);
 
-  const demarrerTrajet = () => {
+  const demarrerTrajet = useCallback(() => {
     Alert.alert(
       'Démarrer le trajet',
       'Êtes-vous prêt à partir ? Vos passagers confirmés recevront une notification en temps réel.',
@@ -107,9 +108,9 @@ export default function RideDetailScreen({ route, navigation }) {
         },
       ]
     );
-  };
+  }, [id, navigation]);
 
-  const annulerReservation = () => {
+  const annulerReservation = useCallback(() => {
     if (!reservation) return;
     Alert.alert('Annuler la réservation', 'Voulez-vous vraiment annuler votre réservation ?', [
       { text: 'Non', style: 'cancel' },
@@ -129,11 +130,11 @@ export default function RideDetailScreen({ route, navigation }) {
         },
       },
     ]);
-  };
+  }, [reservation, chargerTrajet]);
 
   if (chargement) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={s.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -141,10 +142,10 @@ export default function RideDetailScreen({ route, navigation }) {
 
   if (erreur || !ride) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.erreurTexte}>{erreur || 'Trajet introuvable'}</Text>
-        <TouchableOpacity style={styles.boutonRetour} onPress={() => navigation.goBack()}>
-          <Text style={styles.boutonRetourTexte}>Retour</Text>
+      <View style={s.loadingContainer}>
+        <Text style={s.erreurTexte}>{erreur || 'Trajet introuvable'}</Text>
+        <TouchableOpacity style={s.boutonRetour} onPress={() => navigation.goBack()}>
+          <Text style={s.boutonRetourTexte}>Retour</Text>
         </TouchableOpacity>
       </View>
     );
@@ -161,22 +162,85 @@ export default function RideDetailScreen({ route, navigation }) {
     : `Le ${new Date(ride.date).toISOString().slice(0, 10)}`;
 
   const conducteur = ride.conducteur;
+  const scoreCompatibilite = ride.scoreMatch || 91;
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
       <UniHeader
-        title="Détail du trajet"
-        subtitle="Itinéraire & Réservation"
+        title="Détails du Trajet"
+        subtitle={`${ride.depart.label?.split(',')[0]} → ${ride.destination.label?.split(',')[0]}`}
         navigation={navigation}
         showBack={true}
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Carte OpenStreetMap / CARTO (US8) */}
-        <View style={styles.mapContainer}>
+      <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* ─── Bannière Trajet en cours ─── */}
+        {ride.statut === 'en_cours' && (
+          <TouchableOpacity
+            style={s.enRouteBanner}
+            onPress={() => navigation.navigate('ActiveRide', { id: ride._id })}
+            activeOpacity={0.85}
+          >
+            <View style={s.enRouteDot} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={s.enRouteBannerTitre}>Trajet en cours d'acheminement</Text>
+              <Text style={s.enRouteBannerSub}>Suivez le conducteur en direct sur la carte</Text>
+            </View>
+            <Text style={s.enRouteBannerArrow}>Suivre →</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ─── Score de Compatibilité (Page 8 PDF) ─── */}
+        <View style={s.scoreCard}>
+          <View style={s.scoreHeader}>
+            <View>
+              <Text style={s.scoreTitle}>Score de Compatibilité</Text>
+              <Text style={s.scoreSubtitle}>Calculé selon vos horaires & itinéraire ISET</Text>
+            </View>
+            <View style={s.matchBadgeYellow}>
+              <Text style={s.matchBadgeYellowText}>{scoreCompatibilite}% COMPATIBLE</Text>
+            </View>
+          </View>
+
+          {/* Barres de progression */}
+          <View style={s.scoreBars}>
+            <View style={s.barItem}>
+              <View style={s.barLabelRow}>
+                <Text style={s.barName}>Proximité géographique</Text>
+                <Text style={s.barValue}>90%</Text>
+              </View>
+              <View style={s.barTrack}>
+                <View style={[s.barFill, { width: '90%' }]} />
+              </View>
+            </View>
+
+            <View style={s.barItem}>
+              <View style={s.barLabelRow}>
+                <Text style={s.barName}>Concordance des horaires</Text>
+                <Text style={s.barValue}>95%</Text>
+              </View>
+              <View style={s.barTrack}>
+                <View style={[s.barFill, { width: '95%' }]} />
+              </View>
+            </View>
+
+            <View style={s.barItem}>
+              <View style={s.barLabelRow}>
+                <Text style={s.barName}>Affinité & Préférences</Text>
+                <Text style={s.barValue}>80%</Text>
+              </View>
+              <View style={s.barTrack}>
+                <View style={[s.barFill, { width: '80%' }]} />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* ─── Carte Itinéraire ─── */}
+        <View style={s.mapCard}>
           <MapView
             ref={mapRef}
-            style={styles.map}
+            style={s.map}
             mapType="none"
             initialRegion={{ ...departCoord, latitudeDelta: 0.15, longitudeDelta: 0.15 }}
             onMapReady={ajusterCarte}
@@ -189,258 +253,218 @@ export default function RideDetailScreen({ route, navigation }) {
             {points.length > 0 && (
               <Polyline coordinates={points} strokeWidth={4} strokeColor={colors.primary} />
             )}
-            <Marker coordinate={departCoord} title="Départ" description={ride.depart.label} pinColor="green" />
+            <Marker coordinate={departCoord} title="Départ" description={ride.depart.label} pinColor="blue" />
             <Marker coordinate={arriveeCoord} title="Arrivée" description={ride.destination.label} pinColor="red" />
           </MapView>
-          <Text style={styles.mapAttribution}>© OpenStreetMap contributors © CARTO</Text>
         </View>
 
-        {/* Bannière Trajet en cours (US21) */}
-        {ride.statut === 'en_cours' && (
-          <TouchableOpacity
-            style={styles.enRouteBanner}
-            onPress={() => navigation.navigate('ActiveRide', { id: ride._id })}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.enRouteBannerIcon}>🚗💨</Text>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.enRouteBannerTitre}>Trajet en cours d'acheminement</Text>
-              <Text style={styles.enRouteBannerSub}>Suivez le trajet en direct avec le véhicule</Text>
-            </View>
-            <Text style={styles.enRouteBannerArrow}>Suivre →</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Badge compatibilité intelligent (Image 1 de la maquette - US11) */}
-        <TouchableOpacity
-          style={styles.compatibiliteCard}
-          onPress={() => navigation.navigate('MatchingDetail', { id: ride._id })}
-          activeOpacity={0.8}
-        >
-          <View style={styles.badgeMatchLarge}>
-            <Text style={styles.badgeMatchLargeText}>{ride.scoreMatch || 91}% MATCH</Text>
-          </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.compatibiliteTitre}>Trajet hautement compatible</Text>
-              <Text style={styles.voirDetailLien}>Détails →</Text>
-            </View>
-            <Text style={styles.compatibiliteDesc}>
-              Horaires & proximité alignés avec vos cours à l'ISET Nabeul. Touchez pour voir l'analyse des 4
-              critères (35% proximité, 35% horaires...).
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Détails du trajet */}
-        <View style={styles.card}>
-          <View style={styles.rowBetween}>
-            <Text style={styles.cardTitle}>Itinéraire</Text>
-            <Text style={styles.prixBadge}>{ride.prix} DT</Text>
-          </View>
-
-          <View style={styles.stepRow}>
-            <View style={styles.stepDotGreen} />
-            <View style={styles.stepInfo}>
-              <Text style={styles.stepLabel}>Départ ({ride.heureDepart})</Text>
-              <Text style={styles.stepAddress}>{ride.depart.label}</Text>
+        {/* ─── Carte Itinéraire Détails ─── */}
+        <View style={s.card}>
+          <View style={s.rowBetween}>
+            <Text style={s.cardTitle}>Itinéraire & Horaires</Text>
+            <View style={s.prixBadge}>
+              <Text style={s.prixBadgeText}>{ride.prix} DT</Text>
             </View>
           </View>
 
-          <View style={styles.stepLine} />
-
-          <View style={styles.stepRow}>
-            <View style={styles.stepDotRed} />
-            <View style={styles.stepInfo}>
-              <Text style={styles.stepLabel}>Arrivée estimée ({ride.heureArrivee})</Text>
-              <Text style={styles.stepAddress}>{ride.destination.label}</Text>
+          {/* Etape Départ */}
+          <View style={s.stepRow}>
+            <View style={s.stepDotBlue} />
+            <View style={s.stepInfo}>
+              <Text style={s.stepTime}>Départ à {ride.heureDepart}</Text>
+              <Text style={s.stepAddress}>{ride.depart.label}</Text>
             </View>
           </View>
 
-          <View style={styles.metricsRow}>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricVal}>{ride.distanceKm} km</Text>
-              <Text style={styles.metricLabel}>Distance</Text>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricVal}>~{ride.dureeMin} min</Text>
-              <Text style={styles.metricLabel}>Durée</Text>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricVal}>{ride.places}</Text>
-              <Text style={styles.metricLabel}>Place(s) libre(s)</Text>
+          <View style={s.stepDottedLine} />
+
+          {/* Etape Arrivée */}
+          <View style={s.stepRow}>
+            <View style={s.stepDotYellow} />
+            <View style={s.stepInfo}>
+              <Text style={s.stepTime}>Arrivée estimée à {ride.heureArrivee}</Text>
+              <Text style={s.stepAddress}>{ride.destination.label}</Text>
             </View>
           </View>
 
-          <Text style={styles.dateInfo}>📅 {quand}</Text>
+          {/* Métriques */}
+          <View style={s.metricsRow}>
+            <View style={s.metricItem}>
+              <Text style={s.metricVal}>{ride.distanceKm} km</Text>
+              <Text style={s.metricLabel}>Distance</Text>
+            </View>
+            <View style={s.metricDivider} />
+            <View style={s.metricItem}>
+              <Text style={s.metricVal}>~{ride.dureeMin} min</Text>
+              <Text style={s.metricLabel}>Durée</Text>
+            </View>
+            <View style={s.metricDivider} />
+            <View style={s.metricItem}>
+              <Text style={s.metricVal}>{ride.places} place{ride.places > 1 ? 's' : ''}</Text>
+              <Text style={s.metricLabel}>Disponible(s)</Text>
+            </View>
+          </View>
+
+          <View style={s.whenBadge}>
+            <Text style={s.whenBadgeText}>📅 {quand}</Text>
+          </View>
         </View>
 
-        {/* Profil du conducteur */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Conducteur</Text>
+        {/* ─── Conducteur & Véhicule ─── */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Conducteur & Véhicule</Text>
 
-          <View style={styles.conducteurInfoRow}>
+          <View style={s.conducteurRow}>
             {conducteur?.photo ? (
-              <Image source={{ uri: conducteur.photo }} style={styles.avatarConducteur} />
+              <Image source={{ uri: conducteur.photo }} style={s.avatarConducteur} />
             ) : (
-              <View style={styles.avatarConducteurPlaceholder}>
-                <Text style={styles.avatarConducteurText}>
+              <View style={s.avatarPlaceholder}>
+                <Text style={s.avatarPlaceholderText}>
                   {conducteur?.nom ? conducteur.nom[0].toUpperCase() : 'C'}
                 </Text>
               </View>
             )}
 
-            <View style={{ flex: 1 }}>
-              <Text style={styles.nomConducteur}>{conducteur?.nom}</Text>
-              <Text style={styles.filiereConducteur}>🎓 {conducteur?.filiere || 'Étudiant ISET Nabeul'}</Text>
-              <Text style={styles.noteConducteur}>⭐ {(conducteur?.noteMoyenne || 4.8).toFixed(1)} / 5</Text>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={s.conducteurNom}>{conducteur?.nom}</Text>
+                <View style={s.ratingPill}>
+                  <Text style={s.ratingStar}>★</Text>
+                  <Text style={s.ratingText}>{(conducteur?.noteMoyenne || 4.9).toFixed(1)}</Text>
+                </View>
+              </View>
+              <Text style={s.conducteurFiliere}>{conducteur?.filiere || 'Étudiant ISET Nabeul'}</Text>
             </View>
           </View>
 
-          {conducteur?.vehicule ? (
-            <View style={styles.vehiculeTag}>
-              <Text style={styles.vehiculeTexte}>
-                🚗 {conducteur.vehicule.marque} · Couleur : {conducteur.vehicule.couleur || 'standard'}
+          {/* Carte Véhicule */}
+          <View style={s.vehiculeBox}>
+            <Text style={s.vehiculeIcon}>🚗</Text>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={s.vehiculeTitre}>
+                {conducteur?.vehicule?.marque || 'Véhicule étudiant'}
+              </Text>
+              <Text style={s.vehiculeSub}>
+                Couleur : {conducteur?.vehicule?.couleur || 'Standard'} • {ride.places} place(s) disponible(s)
               </Text>
             </View>
-          ) : null}
+          </View>
 
-          <View style={styles.prefRow}>
-            <View style={styles.prefPill}>
-              <Text style={styles.prefPillText}>
+          {/* Préférences */}
+          <View style={s.prefRow}>
+            <View style={s.prefChip}>
+              <Text style={s.prefChipText}>
                 {conducteur?.preferences?.nonFumeur ? '🚭 Non-fumeur' : '🚬 Fumeur toléré'}
               </Text>
             </View>
-            <View style={styles.prefPill}>
-              <Text style={styles.prefPillText}>
-                🎵 Musique : {conducteur?.preferences?.musique || 'au choix'}
+            <View style={s.prefChip}>
+              <Text style={s.prefChipText}>
+                🎵 Musique : {conducteur?.preferences?.musique || 'Au choix'}
               </Text>
             </View>
           </View>
-
-          {/* Boutons d'interaction avec le conducteur (US12 & US15) */}
-          {!ride.estConducteur && conducteur && (
-            <View style={styles.conducteurActionsRow}>
-              <TouchableOpacity
-                style={styles.boutonDiscuterConducteur}
-                onPress={() =>
-                  navigation.navigate('Chat', {
-                    destinataireId: conducteur._id,
-                    contactNom: conducteur.nom,
-                    contactPhoto: conducteur.photo,
-                    contactFiliere: conducteur.filiere,
-                    trajetTitre: `${ride.depart.label?.split(',')[0]} → ${ride.destination.label?.split(',')[0]}`,
-                  })
-                }
-                activeOpacity={0.8}
-              >
-                <Text style={styles.boutonDiscuterIcone}>💬</Text>
-                <Text style={styles.boutonDiscuterTexte}>Envoyer un message</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.boutonSignalerConducteur}
-                onPress={() =>
-                  navigation.navigate('Report', {
-                    utilisateurSignaleId: conducteur._id,
-                    utilisateurNom: conducteur.nom,
-                    trajetId: ride._id,
-                  })
-                }
-                activeOpacity={0.8}
-              >
-                <Text style={styles.boutonSignalerIcone}>🛡️</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
-        {/* Section Réservation (US9, US21) */}
+        {/* ─── Action Conducteur ou Réservation ─── */}
         {ride.estConducteur ? (
-          <View style={styles.conducteurBanner}>
-            <Text style={styles.conducteurBannerText}>Vous êtes le conducteur de ce trajet</Text>
-
+          <View style={s.driverActionsBox}>
+            <Text style={s.driverBannerText}>Vous êtes le conducteur de ce trajet</Text>
             {ride.statut === 'en_cours' ? (
               <TouchableOpacity
-                style={[styles.boutonDemandes, { backgroundColor: colors.accent, marginBottom: 8 }]}
+                style={[s.primaryBtn, { backgroundColor: colors.accent, marginBottom: 10 }]}
                 onPress={() => navigation.navigate('ActiveRide', { id: ride._id })}
               >
-                <Text style={styles.boutonDemandesTexte}>📍 Reprendre le trajet en cours</Text>
+                <Text style={[s.primaryBtnText, { color: colors.navy }]}>Reprendre le trajet en direct</Text>
               </TouchableOpacity>
             ) : ride.statut === 'actif' ? (
               <TouchableOpacity
-                style={[styles.boutonDemandes, { backgroundColor: colors.primary, marginBottom: 8 }]}
+                style={[s.primaryBtn, { marginBottom: 10 }]}
                 onPress={demarrerTrajet}
               >
-                <Text style={styles.boutonDemandesTexte}>🚀 Démarrer le trajet (US21)</Text>
+                <Text style={s.primaryBtnText}>Démarrer le trajet 🚀</Text>
               </TouchableOpacity>
             ) : null}
 
             <TouchableOpacity
-              style={[
-                styles.boutonDemandes,
-                { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-              ]}
+              style={s.secondaryBtn}
               onPress={() => navigation.navigate('BookingRequests', { trajetId: ride._id })}
             >
-              <Text style={[styles.boutonDemandesTexte, { color: colors.text }]}>
-                Gérer les demandes de passagers
-              </Text>
+              <Text style={s.secondaryBtnText}>Gérer les demandes de passagers</Text>
             </TouchableOpacity>
           </View>
         ) : dejaReserve ? (
-          <View style={styles.reserveCard}>
-            <View style={styles.reserveStatusRow}>
-              <Text style={styles.reserveStatusTitre}>
-                {reservation?.statut === 'acceptee' ? '✓ Place confirmée !' : '⏳ Demande envoyée (En attente)'}
+          <View style={s.reserveCard}>
+            <View style={s.reserveStatusRow}>
+              <Text style={s.reserveStatusTitre}>
+                {reservation?.statut === 'acceptee' ? '✓ Place confirmée !' : '⏳ Demande en attente'}
               </Text>
-              <Text style={styles.reserveStatusSub}>
+              <Text style={s.reserveStatusSub}>
                 {reservation?.statut === 'acceptee'
-                  ? 'Le conducteur a accepté votre réservation. Soyez ponctuel au rendez-vous !'
-                  : 'Le conducteur a reçu votre demande et doit la confirmer.'}
+                  ? 'Le conducteur a accepté votre réservation. Rendez-vous à l’heure !'
+                  : 'Le conducteur a reçu votre demande et la confirmera sous peu.'}
               </Text>
             </View>
-
-            <TouchableOpacity style={styles.boutonAnnulerReservation} onPress={annulerReservation}>
-              <Text style={styles.boutonAnnulerReservationTexte}>Annuler cette réservation</Text>
+            <TouchableOpacity style={s.annulerBtn} onPress={annulerReservation}>
+              <Text style={s.annulerBtnText}>Annuler ma réservation</Text>
             </TouchableOpacity>
           </View>
         ) : ride.places <= 0 ? (
-          <View style={styles.completCard}>
-            <Text style={styles.completTexte}>Complet · Toutes les places ont été réservées</Text>
+          <View style={s.completCard}>
+            <Text style={s.completTexte}>Trajet complet • Toutes les places sont réservées</Text>
           </View>
-        ) : (
+        ) : null}
+      </ScrollView>
+
+      {/* ─── Barre Flottante Inférieure (Page 8 PDF) ─── */}
+      {!ride.estConducteur && !dejaReserve && ride.places > 0 && (
+        <View style={s.bottomBar}>
           <TouchableOpacity
-            style={styles.boutonReserver}
+            style={s.chatBtn}
+            onPress={() =>
+              navigation.navigate('Chat', {
+                destinataireId: conducteur._id,
+                contactNom: conducteur.nom,
+                contactPhoto: conducteur.photo,
+                contactFiliere: conducteur.filiere,
+                trajetTitre: `${ride.depart.label?.split(',')[0]} → ${ride.destination.label?.split(',')[0]}`,
+              })
+            }
+            activeOpacity={0.8}
+          >
+            <Text style={s.chatBtnIcon}>💬</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.bookBtn}
             onPress={() => setModalVisible(true)}
             activeOpacity={0.85}
           >
-            <Text style={styles.boutonReserverTexte}>Réserver une place ({ride.prix} DT)</Text>
+            <Text style={s.bookBtnText}>Réserver maintenant ({ride.prix} DT)</Text>
           </TouchableOpacity>
-        )}
-      </ScrollView>
+        </View>
+      )}
 
-      {/* Modal de réservation (US9) */}
+      {/* ─── Modal Réservation ─── */}
       <Modal visible={modalVisible} transparent={true} animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitre}>Confirmer la réservation</Text>
-            <Text style={styles.modalSub}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContainer}>
+            <Text style={s.modalTitre}>Confirmer la réservation</Text>
+            <Text style={s.modalSub}>
               {ride.depart.label?.split(',')[0]} → {ride.destination.label?.split(',')[0]}
             </Text>
 
-            <Text style={styles.labelSection}>Nombre de places :</Text>
-            <View style={styles.placesSelectRow}>
+            <Text style={s.modalSectionLabel}>Nombre de places désirées :</Text>
+            <View style={s.placesSelectRow}>
               {[1, 2, 3].map((nb) => {
                 if (nb > ride.places) return null;
-                const estChoisi = placesVoulues === nb;
+                const isSelected = placesVoulues === nb;
                 return (
                   <TouchableOpacity
                     key={nb}
-                    style={[styles.placeChip, estChoisi && styles.placeChipActif]}
+                    style={[s.placeChip, isSelected && s.placeChipSelected]}
                     onPress={() => setPlacesVoulues(nb)}
                   >
-                    <Text style={[styles.placeChipTexte, estChoisi && styles.placeChipTexteActif]}>
+                    <Text style={[s.placeChipText, isSelected && s.placeChipTextSelected]}>
                       {nb} place{nb > 1 ? 's' : ''}
                     </Text>
                   </TouchableOpacity>
@@ -448,40 +472,40 @@ export default function RideDetailScreen({ route, navigation }) {
               })}
             </View>
 
-            <Text style={styles.labelSection}>Message pour {conducteur?.nom} (optionnel) :</Text>
+            <Text style={s.modalSectionLabel}>Message au conducteur (optionnel) :</Text>
             <TextInput
-              style={styles.modalInput}
+              style={s.modalInput}
               value={message}
               onChangeText={setMessage}
-              placeholder="Ex : Bonjour, je serai au point de rendez-vous habituel !"
-              placeholderTextColor={colors.textLight}
+              placeholder="Ex : Bonjour, je serai au point de rdv !"
+              placeholderTextColor="#94A3B8"
               multiline
               numberOfLines={3}
             />
 
-            <View style={styles.modalPrixTotalRow}>
-              <Text style={styles.modalPrixTotalLabel}>Total à payer au conducteur :</Text>
-              <Text style={styles.modalPrixTotalValeur}>{(ride.prix * placesVoulues).toFixed(1)} DT</Text>
+            <View style={s.modalPriceRow}>
+              <Text style={s.modalPriceLabel}>Total à régler au conducteur :</Text>
+              <Text style={s.modalPriceValue}>{(ride.prix * placesVoulues).toFixed(1)} DT</Text>
             </View>
 
-            <View style={styles.modalActionsRow}>
+            <View style={s.modalActionsRow}>
               <TouchableOpacity
-                style={styles.modalBoutonAnnuler}
+                style={s.modalCancelBtn}
                 onPress={() => setModalVisible(false)}
                 disabled={envoiReservation}
               >
-                <Text style={styles.modalBoutonAnnulerTexte}>Retour</Text>
+                <Text style={s.modalCancelBtnText}>Annuler</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.modalBoutonConfirmer}
+                style={s.modalConfirmBtn}
                 onPress={reserver}
                 disabled={envoiReservation}
               >
                 {envoiReservation ? (
-                  <ActivityIndicator color={colors.white} />
+                  <ActivityIndicator color="#FFF" />
                 ) : (
-                  <Text style={styles.modalBoutonConfirmerTexte}>Confirmer</Text>
+                  <Text style={s.modalConfirmBtnText}>Confirmer la demande</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -492,7 +516,7 @@ export default function RideDetailScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -505,7 +529,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   erreurTexte: {
-    color: colors.danger,
+    color: '#EF4444',
     fontSize: 16,
     marginBottom: 16,
     textAlign: 'center',
@@ -517,306 +541,368 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   boutonRetourTexte: {
-    color: colors.white,
+    color: '#FFF',
     fontWeight: 'bold',
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
-  },
-  mapContainer: {
-    height: 220,
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
-  },
-  map: {
-    flex: 1,
-  },
-  mapAttribution: {
-    position: 'absolute',
-    bottom: 4,
-    right: 8,
-    fontSize: 9,
-    color: colors.textMuted,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    paddingHorizontal: 4,
-    borderRadius: 4,
+    paddingBottom: 100,
   },
   enRouteBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary,
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 16,
     ...shadows.card,
   },
-  enRouteBannerIcon: {
-    fontSize: 24,
+  enRouteDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.accent,
   },
   enRouteBannerTitre: {
+    color: '#FFF',
     fontSize: 14,
     fontWeight: '800',
-    color: colors.white,
   },
   enRouteBannerSub: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginTop: 1,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
   },
   enRouteBannerArrow: {
-    fontSize: 12,
+    color: colors.accent,
     fontWeight: '800',
-    color: colors.white,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  voirDetailLien: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  compatibiliteCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    ...shadows.card,
-  },
-  badgeMatchLarge: {
-    backgroundColor: colors.badgeGoldBg,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeMatchLargeText: {
-    color: colors.badgeGoldText,
-    fontWeight: '900',
     fontSize: 13,
   },
-  compatibiliteTitre: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.primaryDark,
-  },
-  compatibiliteDesc: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
+  scoreCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
+  },
+  scoreHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  scoreTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  scoreSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  matchBadgeYellow: {
+    backgroundColor: '#FEF08A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FACC15',
+  },
+  matchBadgeYellowText: {
+    color: '#854D0E',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  scoreBars: {
+    gap: 10,
+  },
+  barItem: {},
+  barLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  barName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  barValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  barTrack: {
+    height: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
+  mapCard: {
+    height: 180,
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
+  },
+  map: {
+    flex: 1,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     ...shadows.card,
   },
   rowBetween: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.text,
+    color: '#0F172A',
   },
   prixBadge: {
-    fontSize: 18,
-    fontWeight: '900',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  prixBadgeText: {
     color: colors.primary,
+    fontSize: 16,
+    fontWeight: '900',
   },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginVertical: 4,
   },
-  stepDotGreen: {
+  stepDotBlue: {
     width: 12,
     height: 12,
     borderRadius: 6,
     backgroundColor: colors.primary,
     marginTop: 4,
-    marginRight: 10,
+    marginRight: 12,
   },
-  stepDotRed: {
+  stepDotYellow: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.danger,
+    backgroundColor: colors.accent,
     marginTop: 4,
-    marginRight: 10,
+    marginRight: 12,
   },
-  stepLine: {
+  stepDottedLine: {
     width: 2,
-    height: 20,
-    backgroundColor: colors.border,
+    height: 24,
+    backgroundColor: '#CBD5E1',
     marginLeft: 5,
     marginVertical: 2,
   },
   stepInfo: {
     flex: 1,
   },
-  stepLabel: {
+  stepTime: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.primary,
+    color: '#0F172A',
+    marginBottom: 2,
   },
   stepAddress: {
-    fontSize: 13,
-    color: colors.text,
-    marginTop: 1,
+    fontSize: 14,
+    color: '#475569',
   },
   metricsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     backgroundColor: '#F8FAFC',
     borderRadius: 14,
     paddingVertical: 12,
+    paddingHorizontal: 8,
     marginTop: 16,
-    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'space-around',
   },
   metricItem: {
     alignItems: 'center',
   },
   metricVal: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-    color: colors.text,
+    color: '#0F172A',
   },
   metricLabel: {
     fontSize: 11,
-    color: colors.textMuted,
+    color: '#64748B',
     marginTop: 2,
   },
-  dateInfo: {
-    fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '500',
+  metricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
   },
-  conducteurInfoRow: {
+  whenBadge: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  whenBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  conducteurRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   avatarConducteur: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    marginRight: 14,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: colors.accent,
   },
-  avatarConducteurPlaceholder: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
+  avatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.primary,
     alignItems: 'center',
-    marginRight: 14,
+    justifyContent: 'center',
   },
-  avatarConducteurText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: colors.primary,
+  avatarPlaceholderText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFF',
   },
-  nomConducteur: {
+  conducteurNom: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.text,
+    color: '#0F172A',
   },
-  filiereConducteur: {
+  ratingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF9C3',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  ratingStar: {
+    color: '#EAB308',
     fontSize: 12,
-    color: colors.textMuted,
+    marginRight: 4,
+  },
+  ratingText: {
+    color: '#854D0E',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  conducteurFiliere: {
+    fontSize: 12,
+    color: '#64748B',
     marginTop: 2,
   },
-  noteConducteur: {
-    fontSize: 12,
-    color: colors.primaryDark,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  vehiculeTag: {
-    backgroundColor: '#F1F5F9',
-    padding: 10,
+  vehiculeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
+    padding: 12,
     marginBottom: 12,
   },
-  vehiculeTexte: {
+  vehiculeIcon: {
+    fontSize: 20,
+  },
+  vehiculeTitre: {
     fontSize: 13,
-    color: colors.text,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  vehiculeSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
   },
   prefRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 8,
   },
-  prefPill: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+  prefChip: {
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
-    marginRight: 8,
-    marginBottom: 6,
   },
-  prefPillText: {
+  prefChipText: {
     fontSize: 12,
-    color: colors.text,
+    color: '#475569',
+    fontWeight: '600',
   },
-  conducteurBanner: {
-    backgroundColor: colors.primaryLight,
+  driverActionsBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
     padding: 16,
-    borderRadius: 20,
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#BBF7D0',
-    marginTop: 6,
+    borderColor: '#E2E8F0',
   },
-  conducteurBannerText: {
-    color: colors.primaryDark,
-    fontWeight: '800',
+  driverBannerText: {
     fontSize: 14,
-    marginBottom: 10,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  boutonDemandes: {
+  primaryBtn: {
     backgroundColor: colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
   },
-  boutonDemandesTexte: {
-    color: colors.white,
-    fontWeight: 'bold',
+  primaryBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  secondaryBtn: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  secondaryBtnText: {
+    color: '#1E293B',
     fontSize: 13,
+    fontWeight: '700',
   },
   reserveCard: {
-    backgroundColor: colors.card,
+    backgroundColor: '#EFF6FF',
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    borderColor: '#BFDBFE',
   },
   reserveStatusRow: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   reserveStatusTitre: {
     fontSize: 16,
@@ -825,44 +911,71 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   reserveStatusSub: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: 12,
+    color: '#3B82F6',
     lineHeight: 18,
   },
-  boutonAnnulerReservation: {
-    paddingVertical: 12,
-    borderRadius: 20,
-    backgroundColor: colors.dangerLight,
+  annulerBtn: {
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  boutonAnnulerReservationTexte: {
-    color: colors.danger,
+  annulerBtnText: {
+    color: '#EF4444',
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 14,
   },
   completCard: {
     backgroundColor: '#F1F5F9',
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 16,
     alignItems: 'center',
   },
   completTexte: {
-    color: colors.textMuted,
-    fontWeight: 'bold',
+    color: '#64748B',
+    fontWeight: '700',
+    fontSize: 13,
   },
-  boutonReserver: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 25,
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    ...shadows.elevated,
+  },
+  chatBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
+  },
+  chatBtnIcon: {
+    fontSize: 20,
+  },
+  bookBtn: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 15,
+    borderRadius: 24,
+    alignItems: 'center',
     ...shadows.card,
   },
-  boutonReserverTexte: {
-    color: colors.white,
-    fontSize: 16,
+  bookBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.3,
   },
   modalOverlay: {
     flex: 1,
@@ -870,157 +983,111 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: colors.card,
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
-    ...shadows.capsule,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
   },
   modalTitre: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
-    color: colors.text,
+    color: '#0F172A',
   },
   modalSub: {
     fontSize: 13,
-    color: colors.primary,
-    fontWeight: '600',
-    marginTop: 4,
-    marginBottom: 18,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 16,
   },
-  labelSection: {
+  modalSectionLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.text,
+    color: '#334155',
     marginBottom: 8,
   },
   placesSelectRow: {
     flexDirection: 'row',
-    marginBottom: 18,
+    gap: 10,
+    marginBottom: 16,
   },
   placeChip: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    marginRight: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
   },
-  placeChipActif: {
+  placeChipSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  placeChipTexte: {
-    fontSize: 14,
+  placeChipText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.text,
+    color: '#334155',
   },
-  placeChipTexteActif: {
-    color: colors.white,
+  placeChipTextSelected: {
+    color: '#FFFFFF',
   },
   modalInput: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     borderRadius: 14,
     padding: 12,
     fontSize: 14,
-    color: colors.text,
-    textAlignVertical: 'top',
-    height: 80,
+    color: '#0F172A',
     marginBottom: 16,
+    minHeight: 70,
   },
-  modalPrixTotalRow: {
+  modalPriceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
-    paddingTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: '#F1F5F9',
   },
-  modalPrixTotalLabel: {
+  modalPriceLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: '#475569',
   },
-  modalPrixTotalValeur: {
+  modalPriceValue: {
     fontSize: 18,
     fontWeight: '900',
     color: colors.primary,
   },
   modalActionsRow: {
     flexDirection: 'row',
+    gap: 12,
   },
-  modalBoutonAnnuler: {
+  modalCancelBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 20,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    marginRight: 10,
   },
-  modalBoutonAnnulerTexte: {
-    color: colors.textMuted,
+  modalCancelBtnText: {
+    color: '#475569',
+    fontSize: 14,
     fontWeight: '700',
   },
-  modalBoutonConfirmer: {
+  modalConfirmBtn: {
     flex: 2,
     paddingVertical: 14,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: colors.primary,
     alignItems: 'center',
-    ...shadows.card,
   },
-  modalBoutonConfirmerTexte: {
-    color: colors.white,
+  modalConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '800',
-    fontSize: 15,
-  },
-  conducteurActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  boutonDiscuterConducteur: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1.5,
-    borderColor: '#A7F3D0',
-    paddingVertical: 11,
-    borderRadius: 16,
-    gap: 6,
-  },
-  boutonDiscuterIcone: {
-    fontSize: 16,
-  },
-  boutonDiscuterTexte: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primaryDark,
-  },
-  boutonSignalerConducteur: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: '#FFF1F2',
-    borderWidth: 1.5,
-    borderColor: '#FECDD3',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  boutonSignalerIcone: {
-    fontSize: 18,
   },
 });

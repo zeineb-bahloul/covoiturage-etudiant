@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import api from '../api';
 import UniHeader from '../components/UniHeader';
-import { colors, shadows } from '../theme';
+import { colors, shadows, radius } from '../theme';
 
 export default function ReportScreen({ route, navigation }) {
   const {
@@ -27,44 +27,39 @@ export default function ReportScreen({ route, navigation }) {
   const motifs = [
     {
       id: 'comportement_inapproprie',
-      label: 'Comportement inapproprié',
-      description: 'Propos irrespectueux, harcèlement ou attitude déplacée',
-      icone: '⚠️',
+      label: 'Comportement inappropri\u00e9',
+      description: 'Propos irrespectueux ou attitude d\u00e9plac\u00e9e',
     },
     {
       id: 'conduite_dangereuse',
       label: 'Conduite dangereuse',
-      description: 'Excès de vitesse, non-respect du code de la route',
-      icone: '🚗',
+      description: 'Exc\u00e8s de vitesse, non-respect du code de la route',
     },
     {
       id: 'retard_excessif',
       label: 'Retard excessif (> 20 min)',
-      description: 'Absence ou retard majeur sans prévenir',
-      icone: '⏰',
+      description: 'Absence ou retard majeur sans pr\u00e9venir',
     },
     {
       id: 'annulation_imprevue',
       label: 'Annulation au dernier moment',
-      description: 'A annulé le trajet quelques minutes avant',
-      icone: '❌',
+      description: 'A annul\u00e9 le trajet quelques minutes avant',
     },
     {
       id: 'autre',
-      label: 'Autre problème',
-      description: 'Autre situation anormale constatée',
-      icone: '📝',
+      label: 'Autre probl\u00e8me',
+      description: 'Autre situation anormale constat\u00e9e',
     },
   ];
 
-  const envoyerSignalement = async () => {
+  const envoyerSignalement = useCallback(async () => {
     if (!commentaire.trim()) {
-      Alert.alert('Précision requise', 'Veuillez décrire brièvement ce qui s’est passé.');
+      Alert.alert('Pr\u00e9cision requise', 'Veuillez d\u00e9crire bri\u00e8vement ce qui s\u2019est pass\u00e9.');
       return;
     }
 
     if (!utilisateurSignaleId) {
-      Alert.alert('Erreur', 'Identifiant de l’utilisateur manquant.');
+      Alert.alert('Erreur', 'Identifiant de l\u2019utilisateur manquant.');
       return;
     }
 
@@ -78,39 +73,38 @@ export default function ReportScreen({ route, navigation }) {
       });
 
       Alert.alert(
-        'Signalement transmis 🛡️',
-        'Merci pour votre vigilance. L’administration d’UniRide étudie chaque signalement pour préserver un climat sécurisé sur le campus.',
+        'Signalement transmis',
+        'Merci pour votre vigilance. L\u2019administration d\u2019UniRide \u00e9tudie chaque signalement pour pr\u00e9server la s\u00e9curit\u00e9 sur le campus.',
         [{ text: 'Compris', onPress: () => navigation.goBack() }]
       );
     } catch (err) {
-      console.log('Erreur envoi signalement :', err);
-      const msg = err.response?.data?.message || 'Erreur lors de l’envoi';
+      const msg = err.response?.data?.message || 'Erreur lors de l\u2019envoi';
       Alert.alert('Erreur', msg);
     } finally {
       setEnvoiEnCours(false);
     }
-  };
+  }, [commentaire, utilisateurSignaleId, trajetId, motif, navigation]);
 
   return (
     <View style={styles.container}>
       <UniHeader
-        titre="Signaler un souci"
-        sousTitre="Sécurité & Communauté ISET"
-        onBack={() => navigation.goBack()}
+        title="Signaler un souci"
+        subtitle="S\u00e9curit\u00e9 & Communaut\u00e9 ISET"
+        navigation={navigation}
+        showBack={true}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Bandeau d'information sécurité */}
+        {/* Bandeau d'information s\u00e9curit\u00e9 */}
         <View style={styles.infoBandeau}>
-          <Text style={styles.infoBandeauIcone}>🛡️</Text>
+          <View style={styles.infoDot} />
           <Text style={styles.infoBandeauTexte}>
-            Vous signalez <Text style={{ fontWeight: 'bold' }}>{utilisateurNom}</Text>. Votre démarche reste strictement confidentielle.
+            Vous signalez <Text style={{ fontWeight: 'bold' }}>{utilisateurNom}</Text>. Votre d\u00e9marche reste confidentielle.
           </Text>
         </View>
 
-        <Text style={styles.sectionTitre}>QUEL EST LE MOTIF PRINCIPAL ?</Text>
+        <Text style={styles.sectionTitre}>MOTIF DU SIGNALEMENT</Text>
 
-        {/* Liste des motifs sous forme de cartes sélectionnables */}
         <View style={styles.motifsListe}>
           {motifs.map((m) => {
             const selectionne = motif === m.id;
@@ -121,9 +115,6 @@ export default function ReportScreen({ route, navigation }) {
                 onPress={() => setMotif(m.id)}
                 activeOpacity={0.8}
               >
-                <View style={styles.motifIconeCercle}>
-                  <Text style={styles.motifIcone}>{m.icone}</Text>
-                </View>
                 <View style={styles.motifTextes}>
                   <Text style={[styles.motifLabel, selectionne && styles.motifLabelSelectionne]}>
                     {m.label}
@@ -138,19 +129,17 @@ export default function ReportScreen({ route, navigation }) {
           })}
         </View>
 
-        {/* Détails du commentaire */}
-        <Text style={styles.sectionTitre}>DÉTAILS COMPLÉMENTAIRES</Text>
+        <Text style={styles.sectionTitre}>D\u00c9TAILS COMPL\u00c9MENTAIRES</Text>
         <TextInput
           style={styles.champDetails}
-          placeholder="Décrivez avec précision les faits observés..."
+          placeholder="D\u00e9crivez avec pr\u00e9cision les faits observ\u00e9s..."
           placeholderTextColor={colors.textLight}
           value={commentaire}
           onChangeText={setCommentaire}
           multiline
-          numberOfLines={5}
+          numberOfLines={4}
         />
 
-        {/* Boutons */}
         <TouchableOpacity
           style={styles.boutonEnvoyer}
           onPress={envoyerSignalement}
@@ -181,8 +170,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 40,
   },
   infoBandeau: {
@@ -191,12 +180,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 20,
+    borderRadius: radius.md,
+    padding: 12,
+    marginBottom: 16,
   },
-  infoBandeauIcone: {
-    fontSize: 24,
+  infoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
     marginRight: 10,
   },
   infoBandeauTexte: {
@@ -206,42 +198,30 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   sectionTitre: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    color: colors.textLight,
+    color: colors.textMuted,
     letterSpacing: 0.8,
     marginBottom: 10,
     marginTop: 6,
   },
   motifsListe: {
-    gap: 10,
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 18,
   },
   motifCarte: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: radius.md,
     padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadows.card,
   },
   motifCarteSelectionnee: {
-    borderColor: '#EF4444',
+    borderColor: colors.danger,
     backgroundColor: '#FFF5F5',
-  },
-  motifIconeCercle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  motifIcone: {
-    fontSize: 20,
   },
   motifTextes: {
     flex: 1,
@@ -265,39 +245,38 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
   },
   radioCercleActif: {
-    borderColor: '#EF4444',
+    borderColor: colors.danger,
   },
   radioPoint: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.danger,
   },
   champDetails: {
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     padding: 14,
     fontSize: 14,
     color: colors.text,
-    minHeight: 100,
+    minHeight: 90,
     textAlignVertical: 'top',
-    marginBottom: 24,
-    ...shadows.card,
+    marginBottom: 20,
   },
   boutonEnvoyer: {
-    backgroundColor: '#DC2626',
-    paddingVertical: 16,
-    borderRadius: 18,
+    backgroundColor: colors.danger,
+    paddingVertical: 15,
+    borderRadius: radius.full,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
     ...shadows.elevated,
   },
   boutonEnvoyerTexte: {
@@ -315,4 +294,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
