@@ -26,7 +26,13 @@ const rideSchema = new mongoose.Schema(
     distanceKm: { type: Number, default: 0 },
     dureeMin: { type: Number, default: 0 },
     itineraire: { type: [[Number]], default: [] },
-    statut: { type: String, enum: ['actif', 'annule', 'termine'], default: 'actif' },
+    statut: {
+      type: String,
+      enum: ['actif', 'en_cours', 'annule', 'termine'],
+      default: 'actif',
+    },
+    startedAt: { type: Date },
+    finishedAt: { type: Date },
   },
   { timestamps: true }
 );

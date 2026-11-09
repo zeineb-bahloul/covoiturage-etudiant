@@ -1,0 +1,52 @@
+export const colors = {
+  primary: '#0E8345',
+  primaryDark: '#064E3B',
+  primaryLight: '#E8F5E9',
+  primaryGradientStart: '#0E8345',
+  primaryGradientEnd: '#064E3B',
+  accent: '#10B981',
+  background: '#F6FBF7',
+  card: '#FFFFFF',
+  text: '#0F172A',
+  textMuted: '#64748B',
+  textLight: '#94A3B8',
+  border: '#E2E8F0',
+  borderLight: '#EDF2F7',
+  danger: '#DC2626',
+  dangerLight: '#FEE2E2',
+  warning: '#D97706',
+  warningLight: '#FEF3C7',
+  success: '#16A34A',
+  successLight: '#DCFCE7',
+  badgeMatchBg: '#DCFCE7',
+  badgeMatchText: '#15803D',
+  badgeGoldBg: '#FEF9C3',
+  badgeGoldText: '#854D0E',
+  darkCapsule: '#0F172A',
+  white: '#FFFFFF',
+};
+
+export const shadows = {
+  card: {
+    shadowColor: '#0E8345',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardHover: {
+    shadowColor: '#0E8345',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  capsule: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+};
+

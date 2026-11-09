@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,6 +15,14 @@ import PublishRideScreen from './src/screens/PublishRideScreen';
 import SearchRideScreen from './src/screens/SearchRideScreen';
 import RideResultsScreen from './src/screens/RideResultsScreen';
 import RideDetailScreen from './src/screens/RideDetailScreen';
+import BookingRequestsScreen from './src/screens/BookingRequestsScreen';
+import MyBookingsScreen from './src/screens/MyBookingsScreen';
+import MatchingDetailScreen from './src/screens/MatchingDetailScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
+import ActiveRideScreen from './src/screens/ActiveRideScreen';
+import { colors } from './src/theme';
+import { AuthContext } from './src/context/AuthContext';
+
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -40,41 +48,51 @@ export default function App() {
 
   if (chargement) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator>
-        {token ? (
-          <>
-            <Stack.Screen name="Home" options={{ title: 'Accueil' }}>
-              {(props) => <HomeScreen {...props} onLogout={deconnecter} />}
-            </Stack.Screen>
+    <AuthContext.Provider value={{ token, connecter, deconnecter }}>
+      <NavigationContainer>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.card} />
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {token ? (
+            <>
+              <Stack.Screen name="Home">
+                {(props) => <HomeScreen {...props} onLogout={deconnecter} />}
+              </Stack.Screen>
 
-            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Mon profil' }} />
+              <Stack.Screen name="Profile">
+                {(props) => <ProfileScreen {...props} onLogout={deconnecter} />}
+              </Stack.Screen>
 
-            <Stack.Screen name="Vehicle" component={VehicleScreen} options={{ title: 'Mon véhicule' }} />
-            <Stack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Mon emploi du temps' }} />
-            <Stack.Screen name="MyRides" component={MyRidesScreen} options={{ title: 'Mes trajets' }} />
-            <Stack.Screen name="PublishRide" component={PublishRideScreen} options={{ title: 'Publier un trajet' }} />
-            <Stack.Screen name="SearchRide" component={SearchRideScreen} options={{ title: 'Chercher un trajet' }} />
-            <Stack.Screen name="RideResults" component={RideResultsScreen} options={{ title: 'Résultats' }} />
-            <Stack.Screen name="RideDetail" component={RideDetailScreen} options={{ title: 'Détail du trajet' }} />
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="Login" options={{ title: 'Connexion' }}>
-              {(props) => <LoginScreen {...props} onLogin={connecter} />}
-            </Stack.Screen>
+              <Stack.Screen name="Vehicle" component={VehicleScreen} />
+              <Stack.Screen name="Schedule" component={ScheduleScreen} />
+              <Stack.Screen name="MyRides" component={MyRidesScreen} />
+              <Stack.Screen name="PublishRide" component={PublishRideScreen} />
+              <Stack.Screen name="SearchRide" component={SearchRideScreen} />
+              <Stack.Screen name="RideResults" component={RideResultsScreen} />
+              <Stack.Screen name="RideDetail" component={RideDetailScreen} />
+              <Stack.Screen name="BookingRequests" component={BookingRequestsScreen} />
+              <Stack.Screen name="MyBookings" component={MyBookingsScreen} />
+              <Stack.Screen name="MatchingDetail" component={MatchingDetailScreen} />
+              <Stack.Screen name="Notifications" component={NotificationsScreen} />
+              <Stack.Screen name="ActiveRide" component={ActiveRideScreen} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="Login">
+                {(props) => <LoginScreen {...props} onLogin={connecter} />}
+              </Stack.Screen>
 
-            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Inscription' }} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+              <Stack.Screen name="Register" component={RegisterScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </AuthContext.Provider>
   );
 }

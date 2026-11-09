@@ -19,8 +19,12 @@ app.get('/', (req, res) => {
 });
 const mapRoutes = require('./routes/map');
 const rideRoutes = require('./routes/rides');
+const bookingRoutes = require('./routes/bookings');
+const notificationRoutes = require('./routes/notifications');
 app.use('/api/map', mapRoutes);
 app.use('/api/rides', rideRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 mongoose
   .connect(process.env.MONGO_URI)
