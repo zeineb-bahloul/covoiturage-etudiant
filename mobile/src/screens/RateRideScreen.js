@@ -1,391 +1,122 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  Image,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Platform,
-} from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import api from '../api';
-import { colors, shadows, radius } from '../theme';
+import { Avatar, Badge, Button, Card, Chip, EmptyState, ErrorState, Header, Input, Ionicons, Loader, Row, Screen } from '../components/ui';
+import { useDonnees } from '../hooks';
+import { colors, font, spacing } from '../theme';
+import { court, erreurApi } from '../utils';
 
-export default function RateRideScreen({ route, navigation }) {
-  const {
-    trajetId,
-    cibleId,
-    cibleNom = 'Conducteur UniRide',
-    ciblePhoto,
-    roleCible = 'conducteur',
-  } = route.params || {};
+const LIBELLES = ['', 'Très mauvaise expérience', 'Décevant', 'Correct', 'Très bien', 'Excellent !'];
 
-  const [note, setNote] = useState(5);
+/** Noter les covoitureurs après un trajet terminé (US14) + compliments / badges (US17). */
+export default function RateRideScreen({ navigation }) {
+  const [note, setNote] = useState(0);
   const [commentaire, setCommentaire] = useState('');
-  const [badgesSelectionnes, setBadgesSelectionnes] = useState(['Ponctuel', 'Sympathique']);
-  const [envoiEnCours, setEnvoiEnCours] = useState(false);
+  const [compliments, setCompliments] = useState([]);
+  const [envoi, setEnvoi] = useState(false);
+  const [faits, setFaits] = useState(0);
 
-  const badgesDisponibles =
-    roleCible === 'conducteur'
-      ? [
-          { id: 'Ponctuel', label: '⏱️ Ponctuel' },
-          { id: 'Conduite Souple', label: '🚗 Conduite souple' },
-          { id: 'Sympathique', label: '😊 Sympathique' },
-          { id: 'Éco-Conducteur', label: '🌿 Éco-conducteur' },
-        ]
-      : [
-          { id: 'Ponctuel', label: '⏱️ Ponctuel' },
-          { id: 'Sympathique', label: '😊 Sympathique' },
-          { id: 'Respectueux', label: '🤝 Respectueux' },
-        ];
+  const { data, setData, chargement, erreur, reessayer } = useDonnees(async () => {
+    const [aNoter, disponibles] = await Promise.all([api.get('/reviews/a-noter'), api.get('/reviews/compliments')]);
+    return { aNoter: aNoter.data, disponibles: disponibles.data };
+  });
 
-  const basculerBadge = useCallback((badgeId) => {
-    setBadgesSelectionnes((prev) =>
-      prev.includes(badgeId) ? prev.filter((b) => b !== badgeId) : [...prev, badgeId]
+  if (chargement) return <Loader />;
+  if (erreur) return <ErrorState text={erreur} onRetry={reessayer} />;
+
+  const courant = data.aNoter[0];
+  const header = <Header title="Noter mes covoitureurs" subtitle={courant ? `${data.aNoter.length} à noter` : null} onBack={() => navigation.goBack()} />;
+
+  if (!courant) {
+    return (
+      <Screen header={header}>
+        <EmptyState
+          icon={faits ? 'checkmark-done-circle-outline' : 'star-outline'}
+          title={faits ? 'Merci pour vos avis !' : 'Rien à noter pour le moment'}
+          text={faits ? 'Vos évaluations renforcent la confiance entre étudiants.' : 'Après chaque trajet terminé, vous pourrez noter vos covoitureurs ici.'}
+          action="Retour"
+          onAction={() => navigation.goBack()}
+        />
+      </Screen>
     );
-  }, []);
+  }
 
-  const getEtoileLabel = (val) => {
-    switch (val) {
-      case 5:
-        return '⭐ Expérience Excellente !';
-      case 4:
-        return '👍 Très bien';
-      case 3:
-        return '👌 Correct';
-      case 2:
-        return '😕 Décevant';
-      case 1:
-        return '❌ Mauvaise expérience';
-      default:
-        return '';
+  const choix = data.disponibles.filter((c) => c.roles.includes(courant.roleCible));
+  const basculer = (id) => setCompliments((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
+
+  const suivant = () => {
+    setNote(0);
+    setCommentaire('');
+    setCompliments([]);
+    setData((d) => ({ ...d, aNoter: d.aNoter.slice(1) }));
+  };
+
+  const envoyer = async () => {
+    if (!note) {
+      Alert.alert('Choisissez une note', 'Touchez les étoiles pour noter de 1 à 5.');
+      return;
+    }
+    setEnvoi(true);
+    try {
+      await api.post('/reviews', { cibleId: courant.cible._id, trajetId: courant.trajet._id, note, commentaire, badges: compliments });
+      setFaits((n) => n + 1);
+      suivant();
+    } catch (err) {
+      Alert.alert('Avis non enregistré', erreurApi(err));
+    } finally {
+      setEnvoi(false);
     }
   };
 
-  const envoyerAvis = useCallback(async () => {
-    if (!cibleId || !trajetId) {
-      Alert.alert('Erreur', 'Données de trajet manquantes');
-      navigation.navigate('Home');
-      return;
-    }
-
-    setEnvoiEnCours(true);
-    try {
-      await api.post('/reviews', {
-        cibleId,
-        trajetId,
-        note,
-        commentaire: commentaire.trim(),
-        badges: badgesSelectionnes,
-        roleCible,
-      });
-
-      Alert.alert(
-        'Merci pour votre avis !',
-        'Votre évaluation aide à renforcer la confiance et la qualité du covoiturage à l’ISET Nabeul.',
-        [{ text: 'Continuer', onPress: () => navigation.navigate('Home') }]
-      );
-    } catch (err) {
-      const msg = err.response?.data?.message || "Impossible d'enregistrer votre avis";
-      Alert.alert('Information', msg, [
-        { text: 'OK', onPress: () => navigation.navigate('Home') },
-      ]);
-    } finally {
-      setEnvoiEnCours(false);
-    }
-  }, [cibleId, trajetId, note, commentaire, badgesSelectionnes, roleCible, navigation]);
-
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.scrollContent}>
-      {/* ─── Header Célébration (Page 13 PDF) ─── */}
-      <View style={s.celebrationHeader}>
-        <View style={s.checkCircle}>
-          <Text style={s.checkIcon}>✓</Text>
-        </View>
-        <Text style={s.celebrationTitle}>Trajet Terminé !</Text>
-        <Text style={s.celebrationSub}>
-          Merci d'avoir voyagé avec UniRide. Partagez votre expérience avec vos camarades.
+    <Screen
+      header={header}
+      footer={
+        <Row>
+          {data.aNoter.length > 1 ? <Button title="Plus tard" variant="outline" style={{ flex: 1 }} onPress={suivant} /> : null}
+          <Button title="Envoyer mon avis" style={{ flex: 2 }} onPress={envoyer} loading={envoi} disabled={!note} />
+        </Row>
+      }
+      keyboard
+    >
+      <Card style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+        <Avatar uri={courant.cible.photo} nom={courant.cible.nom} size={80} />
+        <Text style={[font.h2, { marginTop: spacing.md }]}>{courant.cible.nom}</Text>
+        <Badge label={courant.roleCible === 'conducteur' ? 'Votre conducteur' : 'Votre passager'} tone="primary" style={{ alignSelf: 'center', marginTop: 6 }} />
+        <Text style={[font.caption, { marginTop: spacing.sm }]}>
+          {court(courant.trajet.depart?.label)} → {court(courant.trajet.destination?.label)}
         </Text>
-      </View>
 
-      {/* ─── Carte d'évaluation ─── */}
-      <View style={s.card}>
-        <View style={s.avatarContainer}>
-          {ciblePhoto ? (
-            <Image source={{ uri: ciblePhoto }} style={s.avatar} />
-          ) : (
-            <View style={s.avatarPlaceholder}>
-              <Text style={s.avatarInitial}>
-                {cibleNom ? cibleNom[0].toUpperCase() : 'U'}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={s.targetName}>{cibleNom}</Text>
-        <View style={s.roleBadge}>
-          <Text style={s.roleBadgeText}>{roleCible.toUpperCase()}</Text>
-        </View>
-
-        {/* Étoiles interactives */}
-        <View style={s.starsRow}>
-          {[1, 2, 3, 4, 5].map((val) => (
-            <TouchableOpacity
-              key={val}
-              onPress={() => setNote(val)}
-              activeOpacity={0.7}
-              style={s.starBtn}
-            >
-              <Text style={[s.starIcon, val <= note ? s.starActive : s.starInactive]}>
-                ★
-              </Text>
-            </TouchableOpacity>
+        <Row gap={6} style={{ marginTop: spacing.xl }}>
+          {[1, 2, 3, 4, 5].map((v) => (
+            <Pressable key={v} onPress={() => setNote(v)} hitSlop={4} accessibilityLabel={`${v} étoile(s)`}>
+              <Ionicons name={v <= note ? 'star' : 'star-outline'} size={40} color={v <= note ? '#F59E0B' : colors.border} />
+            </Pressable>
           ))}
-        </View>
+        </Row>
+        <Text style={[font.label, { marginTop: spacing.sm, minHeight: 20 }]}>{LIBELLES[note]}</Text>
+      </Card>
 
-        <Text style={s.scoreLabel}>{getEtoileLabel(note)}</Text>
-
-        {/* Badges de compliment */}
-        <Text style={s.badgesSectionTitle}>Qu'avez-vous particulièrement apprécié ?</Text>
-        <View style={s.badgesRow}>
-          {badgesDisponibles.map((badge) => {
-            const isSelected = badgesSelectionnes.includes(badge.id);
-            return (
-              <TouchableOpacity
-                key={badge.id}
-                style={[s.badgeChip, isSelected && s.badgeChipActive]}
-                onPress={() => basculerBadge(badge.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.badgeChipText, isSelected && s.badgeChipTextActive]}>
-                  {badge.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Commentaire optionnel */}
-        <TextInput
-          style={s.commentInput}
-          placeholder="Un mot pour remercier ou donner un conseil... (optionnel)"
-          placeholderTextColor="#94A3B8"
-          value={commentaire}
-          onChangeText={setCommentaire}
-          multiline
-          numberOfLines={3}
-        />
+      <Text style={[font.h3, { marginBottom: spacing.md }]}>Qu'avez-vous apprécié ?</Text>
+      <View style={styles.compliments}>
+        {choix.map((c) => (
+          <Chip key={c.id} label={c.titre} icon={c.icone} selected={compliments.includes(c.id)} onPress={() => basculer(c.id)} />
+        ))}
       </View>
 
-      {/* ─── Boutons d'action ─── */}
-      <TouchableOpacity
-        style={s.submitBtn}
-        onPress={envoyerAvis}
-        disabled={envoiEnCours}
-        activeOpacity={0.85}
-      >
-        {envoiEnCours ? (
-          <ActivityIndicator color="#FFF" />
-        ) : (
-          <Text style={s.submitBtnText}>Valider mon évaluation</Text>
-        )}
-      </TouchableOpacity>
+      <Input label="Commentaire (facultatif)" placeholder="Un mot pour remercier ou un conseil…" value={commentaire} onChangeText={setCommentaire} multiline maxLength={500} />
 
-      <TouchableOpacity
-        style={s.skipBtn}
-        onPress={() => navigation.navigate('Home')}
-        activeOpacity={0.7}
+      <Pressable
+        onPress={() => navigation.navigate('Report', { utilisateurSignaleId: courant.cible._id, utilisateurNom: courant.cible.nom, trajetId: courant.trajet._id })}
+        style={{ alignSelf: 'center' }}
+        hitSlop={8}
       >
-        <Text style={s.skipBtnText}>Passer et retourner à l'accueil</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <Text style={{ color: colors.danger, fontWeight: '600' }}>Un problème ? Signaler {courant.cible.nom.split(' ')[0]}</Text>
+      </Pressable>
+    </Screen>
   );
 }
 
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scrollContent: {
-    padding: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 36,
-    paddingBottom: 40,
-  },
-  celebrationHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  checkCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-    ...shadows.elevated,
-  },
-  checkIcon: {
-    color: colors.navy,
-    fontSize: 32,
-    fontWeight: '900',
-  },
-  celebrationTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  celebrationSub: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 20,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 22,
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.card,
-  },
-  avatarContainer: {
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2.5,
-    borderColor: colors.accent,
-  },
-  avatarPlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  targetName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  roleBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  roleBadgeText: {
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  starBtn: {
-    padding: 4,
-  },
-  starIcon: {
-    fontSize: 36,
-  },
-  starActive: {
-    color: '#EAB308',
-  },
-  starInactive: {
-    color: '#E2E8F0',
-  },
-  scoreLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 16,
-  },
-  badgesSectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 10,
-    alignSelf: 'flex-start',
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-    width: '100%',
-  },
-  badgeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  badgeChipActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: colors.primary,
-  },
-  badgeChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  badgeChipTextActive: {
-    color: colors.primary,
-  },
-  commentInput: {
-    width: '100%',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 14,
-    fontSize: 13,
-    color: '#0F172A',
-    minHeight: 70,
-  },
-  submitBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 24,
-    alignItems: 'center',
-    ...shadows.elevated,
-    marginBottom: 12,
-  },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  skipBtn: {
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  skipBtnText: {
-    color: '#64748B',
-    fontSize: 13,
-    fontWeight: '600',
-  },
+const styles = StyleSheet.create({
+  compliments: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.lg },
 });

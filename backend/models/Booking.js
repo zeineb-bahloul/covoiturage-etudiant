@@ -12,7 +12,7 @@ const bookingSchema = new mongoose.Schema(
       enum: ['en_attente', 'acceptee', 'refusee', 'annulee'],
       default: 'en_attente',
     },
-    scoreMatch: { type: Number, default: 91 },
+    scoreMatch: { type: Number, default: null },
   },
   { timestamps: true }
 );

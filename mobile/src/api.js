@@ -1,15 +1,16 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_URL = 'http://192.168.1.43:5000/api';
+// ⚠️ Mettez ici l'adresse IP de l'ordinateur qui fait tourner le backend (ipconfig sous Windows).
+export const SERVER_URL = 'http://192.168.1.43:5000';
+export const API_URL = `${SERVER_URL}/api`;
 
 let cachedToken = null;
+let surDeconnexion = null;
 
 export const setApiToken = async (token) => {
   cachedToken = token;
-  if (token) {
-    await AsyncStorage.setItem('token', token);
-  }
+  if (token) await AsyncStorage.setItem('token', token);
 };
 
 export const clearApiToken = async () => {
@@ -18,23 +19,33 @@ export const clearApiToken = async () => {
 };
 
 export const loadApiToken = async () => {
-  if (!cachedToken) {
-    cachedToken = await AsyncStorage.getItem('token');
-  }
+  if (!cachedToken) cachedToken = await AsyncStorage.getItem('token');
   return cachedToken;
 };
 
-const api = axios.create({
-  baseURL: API_URL,
-  timeout: 8000,
-});
+export const getApiToken = () => cachedToken;
 
-// Intercepteur synchrone — pas de await à chaque requête
+/** App.js enregistre ici la fonction appelée quand le jeton expire (réponse 401). */
+export const surJetonExpire = (fn) => {
+  surDeconnexion = fn;
+};
+
+const api = axios.create({ baseURL: API_URL, timeout: 15000 });
+
 api.interceptors.request.use((config) => {
-  if (cachedToken) {
-    config.headers.Authorization = `Bearer ${cachedToken}`;
-  }
+  if (cachedToken) config.headers.Authorization = `Bearer ${cachedToken}`;
   return config;
 });
+
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    const url = err.config?.url || '';
+    if (err.response?.status === 401 && cachedToken && !url.startsWith('/auth/')) {
+      surDeconnexion?.();
+    }
+    return Promise.reject(err);
+  }
+);
 
 export default api;

@@ -1,213 +1,172 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import api from '../api';
-import { colors } from '../theme';
+import { colors, font, radius, spacing } from '../theme';
+import { Ionicons } from './ui';
+import { court } from '../utils';
 
-export default function AddressPicker({ titre, valeur, onChoisir, placeholder = 'Ex : Nabeul Centre, Hammamet...' }) {
+/**
+ * Recherche d'adresse (géocodage OpenRouteService via le backend).
+ * La recherche se lance automatiquement pendant la saisie.
+ */
+export default function AddressPicker({ label, valeur, onChoisir, placeholder = 'Ville, quartier, lieu…', icon = 'location-outline', raccourcis = [] }) {
   const [texte, setTexte] = useState('');
   const [resultats, setResultats] = useState([]);
   const [recherche, setRecherche] = useState(false);
   const [message, setMessage] = useState('');
+  const minuteur = useRef(null);
+  const derniere = useRef(0);
 
-  const chercher = async () => {
-    setMessage('');
-    if (texte.trim().length < 3) {
-      setMessage('Écrivez au moins 3 caractères');
-      return;
+  useEffect(() => {
+    clearTimeout(minuteur.current);
+    const q = texte.trim();
+    if (q.length < 3) {
+      setResultats([]);
+      setMessage('');
+      return undefined;
     }
-    setRecherche(true);
-    try {
-      const { data } = await api.get('/map/geocode', { params: { text: texte.trim() } });
-      setResultats(data);
-      if (data.length === 0) setMessage('Aucun lieu trouvé');
-    } catch (err) {
-      setMessage(err.response?.data?.message || 'Impossible de joindre le service de carte');
-    } finally {
-      setRecherche(false);
-    }
-  };
+    minuteur.current = setTimeout(async () => {
+      const id = ++derniere.current;
+      setRecherche(true);
+      setMessage('');
+      try {
+        const { data } = await api.get('/map/geocode', { params: { text: q } });
+        if (id !== derniere.current) return;
+        setResultats(data);
+        if (data.length === 0) setMessage('Aucun lieu trouvé en Tunisie');
+      } catch (err) {
+        if (id === derniere.current) setMessage(err.response?.data?.message || 'Service de cartes indisponible');
+      } finally {
+        if (id === derniere.current) setRecherche(false);
+      }
+    }, 450);
+    return () => clearTimeout(minuteur.current);
+  }, [texte]);
 
   const choisir = (lieu) => {
     onChoisir(lieu);
-    setResultats([]);
     setTexte('');
+    setResultats([]);
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.titre}>{titre}</Text>
+    <View style={{ marginBottom: spacing.lg }}>
+      {label ? <Text style={[font.label, { marginBottom: 6 }]}>{label}</Text> : null}
 
       {valeur ? (
-        <View style={styles.valeurCard}>
-          <View style={styles.valeurInfo}>
-            <View style={styles.pinIndicator} />
-            <Text style={styles.valeurTexte} numberOfLines={2}>
+        <View style={styles.selection}>
+          <Ionicons name="location" size={20} color={colors.primary} />
+          <View style={{ flex: 1, marginHorizontal: 10 }}>
+            <Text style={styles.selectionTitre} numberOfLines={1}>
+              {court(valeur.label)}
+            </Text>
+            <Text style={font.caption} numberOfLines={1}>
               {valeur.label}
             </Text>
           </View>
-          <TouchableOpacity onPress={() => onChoisir(null)} style={styles.modifierBouton}>
-            <Text style={styles.modifierTexte}>Modifier</Text>
-          </TouchableOpacity>
+          <Pressable onPress={() => onChoisir(null)} hitSlop={8} style={styles.changer}>
+            <Text style={styles.changerTexte}>Changer</Text>
+          </Pressable>
         </View>
       ) : (
-        <View>
-          <View style={styles.inputRow}>
+        <>
+          <View style={styles.inputBox}>
+            <Ionicons name={icon} size={19} color={colors.faint} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.input}
               value={texte}
               onChangeText={setTexte}
               placeholder={placeholder}
-              placeholderTextColor={colors.textLight}
-              onSubmitEditing={chercher}
+              placeholderTextColor={colors.faint}
+              autoCorrect={false}
               returnKeyType="search"
             />
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={chercher}
-              disabled={recherche}
-              activeOpacity={0.8}
-            >
-              {recherche ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Text style={styles.searchButtonText}>Trouver</Text>
-              )}
-            </TouchableOpacity>
+            {recherche ? <ActivityIndicator size="small" color={colors.primary} /> : null}
           </View>
 
-          {message ? <Text style={styles.erreur}>{message}</Text> : null}
-
-          {resultats.length > 0 && (
-            <View style={styles.resultsContainer}>
-              {resultats.map((lieu, i) => (
-                <TouchableOpacity
-                  key={`${lieu.lat}-${lieu.lng}-${i}`}
-                  onPress={() => choisir(lieu)}
-                  style={styles.resultItem}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.resultPin}>📍</Text>
-                  <Text style={styles.resultText} numberOfLines={2}>
-                    {lieu.label}
+          {raccourcis.length > 0 && texte.length === 0 ? (
+            <View style={styles.raccourcis}>
+              {raccourcis.map((r) => (
+                <Pressable key={r.label} onPress={() => choisir(r)} style={styles.raccourci}>
+                  <Ionicons name={r.icone || 'star-outline'} size={14} color={colors.primary} />
+                  <Text style={styles.raccourciTexte} numberOfLines={1}>
+                    {r.titre || court(r.label)}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
-          )}
-        </View>
+          ) : null}
+
+          {message ? <Text style={styles.message}>{message}</Text> : null}
+
+          {resultats.length > 0 ? (
+            <View style={styles.liste}>
+              {resultats.map((lieu, i) => (
+                <Pressable
+                  key={`${lieu.lat}-${lieu.lng}-${i}`}
+                  onPress={() => choisir(lieu)}
+                  style={({ pressed }) => [styles.item, i > 0 && styles.itemBordure, pressed && { backgroundColor: colors.input }]}
+                >
+                  <Ionicons name="location-outline" size={18} color={colors.muted} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.itemTitre} numberOfLines={1}>
+                      {court(lieu.label)}
+                    </Text>
+                    <Text style={font.caption} numberOfLines={1}>
+                      {lieu.label}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 18,
-  },
-  titre: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  valeurCard: {
+  inputBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: colors.primaryLight,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  valeurInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 10,
-  },
-  pinIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    marginRight: 10,
-  },
-  valeurTexte: {
-    color: colors.primaryDark,
-    fontWeight: '700',
-    fontSize: 14,
-    flex: 1,
-  },
-  modifierBouton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-  modifierTexte: {
-    color: colors.primary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
+    backgroundColor: colors.input,
+    borderRadius: radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-    marginRight: 8,
   },
-  searchButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchButtonText: {
-    color: colors.white,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  erreur: {
-    color: colors.danger,
-    fontSize: 12,
-    marginTop: 6,
-  },
-  resultsContainer: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  resultItem: {
+  input: { flex: 1, paddingVertical: 12, fontSize: 15, color: colors.ink },
+  selection: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
   },
-  resultPin: {
-    fontSize: 16,
-    marginRight: 10,
+  selectionTitre: { fontSize: 15, fontWeight: '700', color: colors.ink },
+  changer: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.sm, backgroundColor: colors.card },
+  changerTexte: { color: colors.primary, fontWeight: '700', fontSize: 13 },
+  message: { color: colors.muted, fontSize: 13, marginTop: 6 },
+  liste: {
+    marginTop: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    overflow: 'hidden',
   },
-  resultText: {
-    fontSize: 13,
-    color: colors.text,
-    flex: 1,
+  item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12 },
+  itemBordure: { borderTopWidth: 1, borderTopColor: colors.borderSoft },
+  itemTitre: { fontSize: 14, fontWeight: '600', color: colors.ink },
+  raccourcis: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  raccourci: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.primarySoft,
+    maxWidth: '100%',
   },
+  raccourciTexte: { color: colors.primary, fontWeight: '600', fontSize: 13 },
 });

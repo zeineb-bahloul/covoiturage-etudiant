@@ -4,35 +4,50 @@ const Booking = require('../models/Booking');
 const Ride = require('../models/Ride');
 const User = require('../models/User');
 const Schedule = require('../models/Schedule');
+const Conversation = require('../models/Conversation');
 const auth = require('../middleware/auth');
 const { creerNotification } = require('../services/notifier');
-const { calculerScoreCompatibiliteDetaille } = require('../services/matching');
+const { calculerScore } = require('../services/matching');
 
 const router = express.Router();
+const idValide = (id) => mongoose.isValidObjectId(id);
+const court = (label) => (label || '').split(',')[0].trim();
+const CHAMPS_TRAJET = 'depart destination heureDepart heureArrivee prix places statut date jours recurrent distanceKm dureeMin';
 
-// 1. Réserver une place (US9, US13)
+/** Crée (ou retrouve) la discussion conducteur ↔ passager liée au trajet. */
+async function conversationDuTrajet(conducteurId, passagerId, ride) {
+  let conv = await Conversation.findOne({
+    participants: { $all: [conducteurId, passagerId] },
+    trajet: ride._id,
+  });
+  if (!conv) {
+    conv = await Conversation.create({
+      participants: [conducteurId, passagerId],
+      trajet: ride._id,
+      titre: `${court(ride.depart.label)} → ${court(ride.destination.label)}`,
+    });
+  }
+  return conv;
+}
+
+// 1. Réserver une place (US9)
 router.post('/', auth, async (req, res) => {
   try {
     const { trajetId, places = 1, message = '' } = req.body;
-
-    if (!mongoose.isValidObjectId(trajetId)) {
-      return res.status(400).json({ message: 'Identifiant de trajet invalide' });
-    }
+    if (!idValide(trajetId)) return res.status(400).json({ message: 'Identifiant de trajet invalide' });
 
     const nbPlaces = Number(places);
     if (!Number.isInteger(nbPlaces) || nbPlaces < 1) {
       return res.status(400).json({ message: 'Nombre de places invalide (minimum 1)' });
     }
 
-    const ride = await Ride.findById(trajetId).populate('conducteur', 'nom preferences noteMoyenne photo filiere');
-    if (!ride || (ride.statut !== 'actif' && ride.statut !== 'en_cours')) {
-      return res.status(404).json({ message: 'Trajet non disponible ou annulé' });
+    const ride = await Ride.findById(trajetId).populate('conducteur', 'nom preferences noteMoyenne nombreAvis');
+    if (!ride || ride.statut !== 'actif' || !ride.conducteur) {
+      return res.status(404).json({ message: 'Trajet non disponible (déjà parti, terminé ou annulé)' });
     }
-
     if (ride.conducteur._id.toString() === req.userId) {
       return res.status(400).json({ message: 'Vous ne pouvez pas réserver votre propre trajet' });
     }
-
     if (ride.places < nbPlaces) {
       return res.status(400).json({ message: `Il ne reste que ${ride.places} place(s) disponible(s)` });
     }
@@ -42,7 +57,6 @@ router.post('/', auth, async (req, res) => {
       passager: req.userId,
       statut: { $in: ['en_attente', 'acceptee'] },
     });
-
     if (existant) {
       return res.status(400).json({
         message:
@@ -52,39 +66,34 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    const passager = await User.findById(req.userId);
-    const schedule = await Schedule.findOne({ user: req.userId });
-
-    const resultatScore = calculerScoreCompatibiliteDetaille({
-      ride,
-      passenger: passager,
-      passengerSchedule: schedule,
-    });
+    const [passager, schedule] = await Promise.all([
+      User.findById(req.userId),
+      Schedule.findOne({ user: req.userId }),
+    ]);
+    const { scoreTotal } = calculerScore({ ride, passager, schedule });
 
     const booking = await Booking.create({
       trajet: trajetId,
       passager: req.userId,
       conducteur: ride.conducteur._id,
       places: nbPlaces,
-      message: (message || '').trim(),
+      message: String(message || '').trim().slice(0, 300),
       statut: 'en_attente',
-      scoreMatch: resultatScore.scoreTotal,
+      scoreMatch: scoreTotal,
     });
 
-    // Envoyer une notification au conducteur (US13)
     await creerNotification({
       destinataire: ride.conducteur._id,
       emetteur: req.userId,
       type: 'reservation_recue',
-      titre: 'Nouvelle demande de réservation ! 💺',
-      message: `${passager.nom} (${passager.filiere || 'Étudiant'}) souhaite réserver ${nbPlaces} place(s) (${resultatScore.scoreTotal}% match).`,
+      titre: 'Nouvelle demande de réservation',
+      message: `${passager.nom} demande ${nbPlaces} place(s) pour ${court(ride.destination.label)} (compatibilité ${scoreTotal} %).`,
       donnees: { trajetId: ride._id, bookingId: booking._id },
     });
 
     const populated = await Booking.findById(booking._id)
       .populate('conducteur', 'nom filiere photo noteMoyenne vehicule')
-      .populate('trajet', 'depart destination heureDepart heureArrivee prix date jours recurrent statut');
-
+      .populate('trajet', CHAMPS_TRAJET);
     res.status(201).json(populated);
   } catch (err) {
     console.error('Erreur réservation :', err);
@@ -92,14 +101,13 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// 2. Consulter mes réservations (en tant que passager) (US9)
+// 2. Mes réservations (passager) — historique complet (US9)
 router.get('/my', auth, async (req, res) => {
   try {
     const bookings = await Booking.find({ passager: req.userId })
-      .populate('conducteur', 'nom filiere photo noteMoyenne vehicule preferences')
-      .populate('trajet', 'depart destination heureDepart heureArrivee prix statut date jours recurrent places')
+      .populate('conducteur', 'nom filiere photo noteMoyenne nombreAvis vehicule preferences')
+      .populate('trajet', CHAMPS_TRAJET)
       .sort({ createdAt: -1 });
-
     res.json(bookings);
   } catch (err) {
     console.error(err);
@@ -107,24 +115,18 @@ router.get('/my', auth, async (req, res) => {
   }
 });
 
-// 3. Consulter les demandes reçues (en tant que conducteur) (US10)
+// 3. Demandes reçues (conducteur) (US10)
 router.get('/requests', auth, async (req, res) => {
   try {
     const { statut, trajetId } = req.query;
     const filter = { conducteur: req.userId };
-
-    if (statut) {
-      filter.statut = statut;
-    }
-    if (trajetId && mongoose.isValidObjectId(trajetId)) {
-      filter.trajet = trajetId;
-    }
+    if (['en_attente', 'acceptee', 'refusee', 'annulee'].includes(statut)) filter.statut = statut;
+    if (trajetId && idValide(trajetId)) filter.trajet = trajetId;
 
     const requests = await Booking.find(filter)
-      .populate('passager', 'nom email filiere photo noteMoyenne preferences')
-      .populate('trajet', 'depart destination heureDepart heureArrivee prix places date jours recurrent statut')
+      .populate('passager', 'nom filiere photo noteMoyenne nombreAvis preferences')
+      .populate('trajet', CHAMPS_TRAJET)
       .sort({ createdAt: -1 });
-
     res.json(requests);
   } catch (err) {
     console.error(err);
@@ -132,19 +134,15 @@ router.get('/requests', auth, async (req, res) => {
   }
 });
 
-// 4. Vérifier si l'utilisateur connecté a déjà réservé un trajet spécifique
+// 4. Ma réservation active pour un trajet donné
 router.get('/ride/:rideId', auth, async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.rideId)) {
-      return res.status(400).json({ message: 'Identifiant invalide' });
-    }
-
+    if (!idValide(req.params.rideId)) return res.status(400).json({ message: 'Identifiant invalide' });
     const booking = await Booking.findOne({
       trajet: req.params.rideId,
       passager: req.userId,
       statut: { $in: ['en_attente', 'acceptee'] },
     });
-
     res.json({ booked: !!booking, booking: booking || null });
   } catch (err) {
     console.error(err);
@@ -152,57 +150,48 @@ router.get('/ride/:rideId', auth, async (req, res) => {
   }
 });
 
-// 5. Accepter une réservation (US10, US13)
+// 5. Accepter une demande (US10)
 router.patch('/:id/accept', auth, async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: 'Identifiant invalide' });
-    }
+    if (!idValide(req.params.id)) return res.status(400).json({ message: 'Identifiant invalide' });
 
     const booking = await Booking.findById(req.params.id);
-    if (!booking) {
-      return res.status(404).json({ message: 'Demande introuvable' });
-    }
-
+    if (!booking) return res.status(404).json({ message: 'Demande introuvable' });
     if (booking.conducteur.toString() !== req.userId) {
       return res.status(403).json({ message: 'Non autorisé à gérer cette demande' });
     }
-
-    if (booking.statut === 'acceptee') {
-      return res.json(booking);
+    if (booking.statut === 'acceptee') return res.json(booking);
+    if (booking.statut !== 'en_attente') {
+      return res.status(400).json({ message: 'Cette demande a été annulée ou déjà traitée' });
     }
 
-    const ride = await Ride.findById(booking.trajet);
-    if (!ride || (ride.statut !== 'actif' && ride.statut !== 'en_cours')) {
-      return res.status(400).json({ message: 'Trajet non disponible ou annulé' });
+    // Décrément atomique : impossible d'accepter plus de passagers que de places
+    const ride = await Ride.findOneAndUpdate(
+      { _id: booking.trajet, statut: 'actif', places: { $gte: booking.places } },
+      { $inc: { places: -booking.places } },
+      { returnDocument: 'after' }
+    );
+    if (!ride) {
+      return res.status(400).json({ message: 'Plus assez de places libres, ou trajet déjà parti' });
     }
-
-    if (ride.places < booking.places) {
-      return res.status(400).json({
-        message: `Impossible d'accepter : plus assez de places libres (${ride.places} restante(s))`,
-      });
-    }
-
-    ride.places = Math.max(0, ride.places - booking.places);
-    await ride.save();
 
     booking.statut = 'acceptee';
     await booking.save();
 
-    // Notifier le passager (US13)
+    const conv = await conversationDuTrajet(req.userId, booking.passager, ride);
+
     await creerNotification({
       destinataire: booking.passager,
       emetteur: req.userId,
       type: 'reservation_acceptee',
-      titre: 'Réservation acceptée ! 🎉',
-      message: `Votre place vers l'ISET Nabeul est confirmée (départ à ${ride.heureDepart}).`,
-      donnees: { trajetId: ride._id, bookingId: booking._id },
+      titre: 'Réservation acceptée',
+      message: `Votre place pour ${court(ride.destination.label)} est confirmée (départ ${ride.heureDepart}). Fixez le point de rendez-vous dans le chat.`,
+      donnees: { trajetId: ride._id, bookingId: booking._id, conversationId: conv._id },
     });
 
     const populated = await Booking.findById(booking._id)
-      .populate('passager', 'nom email filiere photo noteMoyenne')
-      .populate('trajet');
-
+      .populate('passager', 'nom filiere photo noteMoyenne')
+      .populate('trajet', CHAMPS_TRAJET);
     res.json(populated);
   } catch (err) {
     console.error(err);
@@ -210,43 +199,38 @@ router.patch('/:id/accept', auth, async (req, res) => {
   }
 });
 
-// 6. Refuser une réservation (US10, US13)
+// 6. Refuser une demande (US10)
 router.patch('/:id/refuse', auth, async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: 'Identifiant invalide' });
-    }
+    if (!idValide(req.params.id)) return res.status(400).json({ message: 'Identifiant invalide' });
 
     const booking = await Booking.findById(req.params.id);
-    if (!booking) {
-      return res.status(404).json({ message: 'Demande introuvable' });
-    }
-
+    if (!booking) return res.status(404).json({ message: 'Demande introuvable' });
     if (booking.conducteur.toString() !== req.userId) {
       return res.status(403).json({ message: 'Non autorisé à gérer cette demande' });
+    }
+    if (!['en_attente', 'acceptee'].includes(booking.statut)) {
+      return res.status(400).json({ message: 'Cette demande est déjà annulée ou refusée' });
     }
 
     if (booking.statut === 'acceptee') {
       await Ride.findByIdAndUpdate(booking.trajet, { $inc: { places: booking.places } });
     }
-
     booking.statut = 'refusee';
     await booking.save();
 
-    // Notifier le passager (US13)
     await creerNotification({
       destinataire: booking.passager,
       emetteur: req.userId,
       type: 'reservation_refusee',
-      titre: 'Demande non validée',
-      message: `Le conducteur ne peut pas accepter votre demande pour ce trajet.`,
+      titre: 'Demande refusée',
+      message: 'Le conducteur ne peut pas vous prendre sur ce trajet. Consultez les autres suggestions.',
       donnees: { trajetId: booking.trajet, bookingId: booking._id },
     });
 
     const populated = await Booking.findById(booking._id)
-      .populate('passager', 'nom email filiere photo noteMoyenne')
-      .populate('trajet');
-
+      .populate('passager', 'nom filiere photo noteMoyenne')
+      .populate('trajet', CHAMPS_TRAJET);
     res.json(populated);
   } catch (err) {
     console.error(err);
@@ -254,40 +238,37 @@ router.patch('/:id/refuse', auth, async (req, res) => {
   }
 });
 
-// 7. Annuler une réservation (par le passager) (US9, US13)
+// 7. Annuler sa réservation (passager)
 router.patch('/:id/cancel', auth, async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: 'Identifiant invalide' });
-    }
+    if (!idValide(req.params.id)) return res.status(400).json({ message: 'Identifiant invalide' });
 
-    const booking = await Booking.findById(req.params.id);
-    if (!booking) {
-      return res.status(404).json({ message: 'Réservation introuvable' });
-    }
-
-    if (booking.passager.toString() !== req.userId) {
+    const booking = await Booking.findById(req.params.id).populate('passager', 'nom');
+    if (!booking) return res.status(404).json({ message: 'Réservation introuvable' });
+    if (booking.passager._id.toString() !== req.userId) {
       return res.status(403).json({ message: 'Non autorisé à annuler cette réservation' });
     }
+    if (!['en_attente', 'acceptee'].includes(booking.statut)) {
+      return res.json({ message: 'Réservation déjà close', booking });
+    }
 
-    if (booking.statut === 'annulee') {
-      return res.json(booking);
+    const ride = await Ride.findById(booking.trajet);
+    if (ride && ride.statut !== 'actif') {
+      return res.status(400).json({ message: 'Le trajet a déjà démarré ou est terminé' });
     }
 
     if (booking.statut === 'acceptee') {
       await Ride.findByIdAndUpdate(booking.trajet, { $inc: { places: booking.places } });
     }
-
     booking.statut = 'annulee';
     await booking.save();
 
-    // Notifier le conducteur (US13)
     await creerNotification({
       destinataire: booking.conducteur,
       emetteur: req.userId,
       type: 'reservation_annulee',
-      titre: 'Place libérée (Annulation passager)',
-      message: `Un passager a annulé sa réservation. La place a été remise à disposition.`,
+      titre: 'Réservation annulée',
+      message: `${booking.passager.nom} a annulé sa réservation. La place est de nouveau disponible.`,
       donnees: { trajetId: booking.trajet, bookingId: booking._id },
     });
 

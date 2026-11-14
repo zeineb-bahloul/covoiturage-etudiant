@@ -19,15 +19,26 @@ const userSchema = new mongoose.Schema(
     motDePasse: { type: String, required: true },
     filiere: { type: String, default: '' },
     adresse: { type: String, default: '' },
+    // Adresse approximative géolocalisée (sert au calcul de proximité du matching)
+    domicile: {
+      type: new mongoose.Schema(
+        {
+          label: { type: String, required: true },
+          location: {
+            type: { type: String, enum: ['Point'], default: 'Point' },
+            coordinates: { type: [Number], required: true },
+          },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
     photo: { type: String, default: '' },
     telephone: { type: String, default: '' },
     role: { type: String, enum: ['utilisateur', 'admin'], default: 'utilisateur' },
     noteMoyenne: { type: Number, default: 0 },
     nombreAvis: { type: Number, default: 0 },
-    badges: {
-      type: [String],
-      default: ['Pionnier ISET 🎓'],
-    },
+    badges: { type: [String], default: ['pionnier'] },
     statistiques: {
       co2Economise: { type: Number, default: 0 },
       argentEconomise: { type: Number, default: 0 },
@@ -39,6 +50,9 @@ const userSchema = new mongoose.Schema(
       musique: { type: String, enum: ['calme', 'animee', 'aucune'], default: 'aucune' },
     },
     vehicule: { type: vehiculeSchema, default: null },
+    // Mot de passe oublié : code à 6 chiffres (haché) valable 15 minutes
+    resetCode: { type: String, default: null, select: false },
+    resetExpire: { type: Date, default: null, select: false },
   },
   { timestamps: true }
 );

@@ -1,517 +1,190 @@
-import React, { useState, useCallback } from 'react';
-import {
-  ScrollView,
-  View,
-  Text,
-  TextInput,
-  Switch,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Text, View } from 'react-native';
 import api from '../api';
-import { colors, shadows, radius } from '../theme';
 import AddressPicker from '../components/AddressPicker';
-import UniHeader from '../components/UniHeader';
+import TimeInput from '../components/TimeInput';
+import { Button, Card, Chip, Field, Header, Input, Loader, Notice, Row, Screen, Segmented, Stepper } from '../components/ui';
+import { colors, font, radius, spacing } from '../theme';
+import { HEURE, JOURS, dateISO, erreurApi } from '../utils';
 
-const JOURS = [
-  { cle: 'lundi', label: 'L' },
-  { cle: 'mardi', label: 'M' },
-  { cle: 'mercredi', label: 'M' },
-  { cle: 'jeudi', label: 'J' },
-  { cle: 'vendredi', label: 'V' },
-  { cle: 'samedi', label: 'S' },
-];
+// Destination la plus fréquente : proposée en raccourci
+const ISET = { label: 'ISET Nabeul, Campus universitaire Mrezgua, Nabeul', lat: 36.4378, lng: 10.6794, titre: 'ISET Nabeul', icone: 'school-outline' };
 
-const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function prochainsJours() {
+  const noms = ["Aujourd'hui", 'Demain'];
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return { valeur: dateISO(d), label: noms[i] || d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) };
+  });
+}
 
+/** Publier un trajet ponctuel ou récurrent (US6). */
 export default function PublishRideScreen({ navigation }) {
+  const [user, setUser] = useState(null);
   const [depart, setDepart] = useState(null);
   const [destination, setDestination] = useState(null);
   const [heure, setHeure] = useState('07:45');
   const [places, setPlaces] = useState(3);
-  const [prix, setPrix] = useState('2.5');
-  const [recurrent, setRecurrent] = useState(true);
+  const [prix, setPrix] = useState('3');
+  const [recurrent, setRecurrent] = useState('recurrent');
   const [jours, setJours] = useState(['lundi', 'mardi', 'mercredi', 'jeudi']);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(dateISO());
   const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState('');
 
-  const basculerJour = useCallback((cle) => {
-    setJours((avant) => (avant.includes(cle) ? avant.filter((j) => j !== cle) : [...avant, cle]));
+  useEffect(() => {
+    api
+      .get('/auth/me')
+      .then(({ data }) => {
+        setUser(data);
+        if (data.vehicule) setPlaces(Math.min(3, data.vehicule.places));
+        if (data.domicile) {
+          const [lng, lat] = data.domicile.location.coordinates;
+          setDepart({ label: data.domicile.label, lat, lng });
+        }
+      })
+      .catch((err) => setErreur(erreurApi(err)));
   }, []);
 
-  const modifierPlaces = useCallback((delta) => {
-    setPlaces((prev) => Math.min(6, Math.max(1, prev + delta)));
-  }, []);
+  const basculerJour = (cle) => setJours((a) => (a.includes(cle) ? a.filter((j) => j !== cle) : [...a, cle]));
 
-  const publier = useCallback(async () => {
-    if (!depart || !destination) {
-      Alert.alert('Champs requis', 'Veuillez sélectionner le départ et la destination');
-      return;
-    }
-    if (!HEURE.test(heure)) {
-      Alert.alert('Heure invalide', 'Indiquez une heure de départ au format HH:MM (ex : 07:45)');
-      return;
-    }
-    if (!places || prix === '') {
-      Alert.alert('Places & Prix requis', 'Indiquez le nombre de places et le prix par passager');
-      return;
-    }
-    if (recurrent && jours.length === 0) {
-      Alert.alert('Jour requis', 'Choisissez au moins un jour de la semaine pour ce trajet régulier');
-      return;
-    }
-    if (!recurrent && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      Alert.alert('Date invalide', 'Indiquez la date au format AAAA-MM-JJ');
-      return;
-    }
+  const publier = async () => {
+    setErreur('');
+    const montant = Number(String(prix).replace(',', '.'));
+    if (!depart || !destination) return setErreur('Choisissez le départ et la destination.');
+    if (!HEURE.test(heure)) return setErreur("Heure de départ au format HH:MM (ex : 07:45).");
+    if (!Number.isFinite(montant) || montant < 0) return setErreur('Indiquez un prix valide (0 si gratuit).');
+    if (recurrent === 'recurrent' && jours.length === 0) return setErreur('Choisissez au moins un jour.');
 
     setEnvoi(true);
     try {
       const { data } = await api.post('/rides', {
-        depart,
-        destination,
+        depart: { label: depart.label, lat: depart.lat, lng: depart.lng },
+        destination: { label: destination.label, lat: destination.lat, lng: destination.lng },
         heureDepart: heure,
-        places: Number(places),
-        prix: Number(String(prix).replace(',', '.')),
-        recurrent,
-        jours: recurrent ? jours : [],
-        date: recurrent ? undefined : date,
+        places,
+        prix: montant,
+        recurrent: recurrent === 'recurrent',
+        jours: recurrent === 'recurrent' ? jours : [],
+        date: recurrent === 'recurrent' ? undefined : date,
       });
-
       Alert.alert(
-        'Trajet publié avec succès !',
-        `Distance : ${data.distanceKm} km, durée ~${data.dureeMin} min.\nArrivée prévue à ${data.heureArrivee}. Vos camarades peuvent maintenant réserver !`,
-        [{ text: 'Voir mes trajets', onPress: () => navigation.goBack() }]
+        'Trajet publié',
+        `${String(data.distanceKm).replace('.', ',')} km · environ ${data.dureeMin} min · arrivée prévue à ${data.heureArrivee}.\nLes étudiants compatibles ont été prévenus.`,
+        [{ text: 'Voir mes trajets', onPress: () => navigation.replace('MyRides') }]
       );
     } catch (err) {
-      Alert.alert('Erreur', err.response?.data?.message || 'Impossible de joindre le serveur');
+      setErreur(erreurApi(err));
     } finally {
       setEnvoi(false);
     }
-  }, [depart, destination, heure, places, prix, recurrent, jours, date, navigation]);
+  };
+
+  if (!user && !erreur) return <Loader />;
+
+  if (user && !user.vehicule) {
+    return (
+      <Screen header={<Header title="Publier un trajet" onBack={() => navigation.goBack()} />}>
+        <Notice tone="warning" icon="car-outline" title="Ajoutez d'abord votre véhicule" text="La capacité de votre véhicule limite le nombre de places proposées." />
+        <Button title="Ajouter mon véhicule" onPress={() => navigation.replace('Vehicle')} />
+      </Screen>
+    );
+  }
+
+  const maxPlaces = user?.vehicule?.places || 4;
+  const dates = prochainsJours();
 
   return (
-    <View style={s.container}>
-      <UniHeader
-        title="Proposer un trajet"
-        subtitle="Partagez vos trajets vers l'ISET"
-        navigation={navigation}
-        showBack={true}
-      />
-
-      <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* ─── Carte Itinéraire (Page 9 PDF) ─── */}
-        <View style={s.card}>
-          <Text style={s.cardSectionTitle}>ITINÉRAIRE</Text>
-
-          <AddressPicker
-            titre="Point de départ"
-            valeur={depart}
-            onChoisir={setDepart}
-            placeholder="Ex : Gare Nabeul, Hammamet..."
-          />
-
-          <View style={s.routeDivider}>
-            <View style={s.routeDotBlue} />
-            <View style={s.routeLine} />
-            <View style={s.routeDotYellow} />
+    <Screen
+      header={<Header title="Publier un trajet" subtitle="Partagez vos places libres" onBack={() => navigation.goBack()} />}
+      footer={<Button title="Publier le trajet" icon="paper-plane-outline" onPress={publier} loading={envoi} />}
+      keyboard
+    >
+      <Card>
+        <AddressPicker label="Départ" valeur={depart} onChoisir={setDepart} placeholder="Ex : Hammamet centre" />
+        <AddressPicker label="Destination" valeur={destination} onChoisir={setDestination} placeholder="Ex : ISET Nabeul" icon="flag-outline" raccourcis={[ISET]} />
+        <Row style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={font.label}>Heure de départ</Text>
+            <Text style={font.caption}>L'arrivée est calculée avec l'itinéraire</Text>
           </View>
+          <TimeInput value={heure} onChange={setHeure} placeholder="07:45" />
+        </Row>
+      </Card>
 
-          <AddressPicker
-            titre="Destination"
-            valeur={destination}
-            onChoisir={setDestination}
-            placeholder="Ex : ISET Nabeul"
-          />
-        </View>
-
-        {/* ─── Horaire & Fréquence ─── */}
-        <View style={s.card}>
-          <Text style={s.cardSectionTitle}>HORAIRE & FRÉQUENCE</Text>
-
-          <Text style={s.fieldLabel}>HEURE DE DÉPART</Text>
-          <TextInput
-            style={s.input}
-            value={heure}
-            onChangeText={setHeure}
-            placeholder="07:45"
-            placeholderTextColor="#94A3B8"
-            keyboardType="numbers-and-punctuation"
-            maxLength={5}
-          />
-
-          <View style={s.recurrentRow}>
-            <View>
-              <Text style={s.recurrentTitle}>Trajet régulier</Text>
-              <Text style={s.recurrentSub}>Répété chaque semaine selon vos cours</Text>
-            </View>
-            <Switch
-              value={recurrent}
-              onValueChange={setRecurrent}
-              trackColor={{ false: '#E2E8F0', true: colors.primary }}
-              thumbColor={recurrent ? colors.accent : '#FFF'}
-            />
-          </View>
-
-          {recurrent ? (
-            <View style={s.joursSection}>
-              <Text style={s.fieldLabel}>JOURS DU TRAJET</Text>
-              <View style={s.joursRow}>
-                {JOURS.map((j) => {
-                  const actif = jours.includes(j.cle);
-                  return (
-                    <TouchableOpacity
-                      key={j.cle}
-                      onPress={() => basculerJour(j.cle)}
-                      style={[s.jourCircle, actif && s.jourCircleActif]}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[s.jourCircleText, actif && s.jourCircleTextActif]}>
-                        {j.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          ) : (
-            <View style={{ marginTop: 10 }}>
-              <Text style={s.fieldLabel}>DATE DU TRAJET</Text>
-              <TextInput
-                style={s.input}
-                value={date}
-                onChangeText={setDate}
-                placeholder="AAAA-MM-JJ"
-                placeholderTextColor="#94A3B8"
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
-              />
-            </View>
-          )}
-        </View>
-
-        {/* ─── Places et Prix ─── */}
-        <View style={s.card}>
-          <Text style={s.cardSectionTitle}>PLACES & TARIF</Text>
-
-          {/* Stepper places */}
-          <View style={s.stepperRow}>
-            <View>
-              <Text style={s.stepperTitle}>Places disponibles</Text>
-              <Text style={s.stepperSub}>Passagers acceptés dans le véhicule</Text>
-            </View>
-
-            <View style={s.stepperControls}>
-              <TouchableOpacity
-                style={s.stepperBtn}
-                onPress={() => modifierPlaces(-1)}
-                activeOpacity={0.7}
-              >
-                <Text style={s.stepperBtnText}>−</Text>
-              </TouchableOpacity>
-              <Text style={s.stepperValue}>{places}</Text>
-              <TouchableOpacity
-                style={s.stepperBtn}
-                onPress={() => modifierPlaces(1)}
-                activeOpacity={0.7}
-              >
-                <Text style={s.stepperBtnText}>+</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={s.divider} />
-
-          {/* Tarif par passager */}
-          <View style={s.priceSection}>
-            <View style={s.priceHeader}>
-              <View>
-                <Text style={s.stepperTitle}>Participation aux frais</Text>
-                <Text style={s.stepperSub}>Prix conseillé par passager</Text>
-              </View>
-
-              <View style={s.priceInputBox}>
-                <TextInput
-                  style={s.priceInput}
-                  value={String(prix)}
-                  onChangeText={setPrix}
-                  keyboardType="decimal-pad"
-                  placeholder="2.5"
-                  placeholderTextColor="#94A3B8"
-                />
-                <Text style={s.priceCurrency}>DT</Text>
-              </View>
-            </View>
-
-            {/* Suggestions rapides de prix */}
-            <View style={s.priceChipsRow}>
-              {['1.5', '2.0', '2.5', '3.0'].map((p) => {
-                const isSelected = String(prix) === p;
+      <Card>
+        <Segmented
+          value={recurrent}
+          onChange={setRecurrent}
+          options={[
+            { value: 'recurrent', label: 'Chaque semaine' },
+            { value: 'ponctuel', label: 'Une seule fois' },
+          ]}
+          style={{ marginBottom: spacing.lg }}
+        />
+        {recurrent === 'recurrent' ? (
+          <Field label="Jours du trajet" style={{ marginBottom: 0 }}>
+            <Row style={{ justifyContent: 'space-between' }}>
+              {JOURS.map((j) => {
+                const actif = jours.includes(j.cle);
                 return (
-                  <TouchableOpacity
-                    key={p}
-                    style={[s.priceChip, isSelected && s.priceChipSelected]}
-                    onPress={() => setPrix(p)}
+                  <Text
+                    key={j.cle}
+                    onPress={() => basculerJour(j.cle)}
+                    style={{
+                      width: 44,
+                      paddingVertical: 10,
+                      textAlign: 'center',
+                      borderRadius: radius.md,
+                      overflow: 'hidden',
+                      fontWeight: '700',
+                      backgroundColor: actif ? colors.primary : colors.input,
+                      color: actif ? colors.white : colors.muted,
+                    }}
                   >
-                    <Text style={[s.priceChipText, isSelected && s.priceChipTextSelected]}>
-                      {p} DT
-                    </Text>
-                  </TouchableOpacity>
+                    {j.court}
+                  </Text>
                 );
               })}
-            </View>
-          </View>
-        </View>
+            </Row>
+          </Field>
+        ) : (
+          <Field label="Date" style={{ marginBottom: 0 }}>
+            <Row gap={8} style={{ flexWrap: 'wrap' }}>
+              {dates.map((d) => (
+                <Chip key={d.valeur} label={d.label} selected={date === d.valeur} onPress={() => setDate(d.valeur)} />
+              ))}
+            </Row>
+          </Field>
+        )}
+      </Card>
 
-        {/* ─── Bouton de publication (Bleu Royal) ─── */}
-        <TouchableOpacity
-          style={s.publishBtn}
-          onPress={publier}
-          disabled={envoi}
-          activeOpacity={0.85}
-        >
-          {envoi ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={s.publishBtnText}>Publier mon trajet 🚗</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+      <Card>
+        <Row style={{ justifyContent: 'space-between', marginBottom: spacing.lg }}>
+          <View style={{ flex: 1 }}>
+            <Text style={font.label}>Places proposées</Text>
+            <Text style={font.caption}>Votre véhicule : {maxPlaces} place(s)</Text>
+          </View>
+          <Stepper value={places} onChange={setPlaces} min={1} max={maxPlaces} />
+        </Row>
+        <Input
+          label="Participation par passager (DT)"
+          icon="cash-outline"
+          value={prix}
+          onChangeText={setPrix}
+          keyboardType="decimal-pad"
+          hint={recurrent === 'recurrent' ? 'Prix par trajet. Ex : 3 DT × 4 jours = 12 DT par semaine.' : 'Prix du trajet pour un passager.'}
+          style={{ marginBottom: 8 }}
+        />
+        <Row gap={8}>
+          {['2', '3', '5', '8'].map((p) => (
+            <Chip key={p} label={`${p} DT`} selected={prix === p} onPress={() => setPrix(p)} />
+          ))}
+        </Row>
+      </Card>
+
+      {erreur ? <Notice tone="danger" icon="alert-circle-outline" text={erreur} /> : null}
+    </Screen>
   );
 }
-
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.card,
-  },
-  cardSectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0.8,
-    marginBottom: 14,
-  },
-  routeDivider: {
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  routeDotBlue: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-  },
-  routeLine: {
-    width: 2,
-    height: 16,
-    backgroundColor: '#CBD5E1',
-    marginVertical: 2,
-  },
-  routeDotYellow: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.6,
-    marginBottom: 6,
-    marginTop: 6,
-  },
-  input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  recurrentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  recurrentTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  recurrentSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  joursSection: {
-    marginTop: 14,
-  },
-  joursRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  jourCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-  },
-  jourCircleActif: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  jourCircleText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#475569',
-  },
-  jourCircleTextActif: {
-    color: '#FFFFFF',
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  stepperTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  stepperSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  stepperControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  stepperBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  stepperBtnText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  stepperValue: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0F172A',
-    minWidth: 20,
-    textAlign: 'center',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 14,
-  },
-  priceSection: {},
-  priceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  priceInputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  priceInput: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    width: 44,
-    textAlign: 'center',
-  },
-  priceCurrency: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.primary,
-    marginLeft: 4,
-  },
-  priceChipsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 6,
-  },
-  priceChip: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  priceChipSelected: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-  priceChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  priceChipTextSelected: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  publishBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 24,
-    alignItems: 'center',
-    ...shadows.elevated,
-    marginTop: 8,
-  },
-  publishBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-});

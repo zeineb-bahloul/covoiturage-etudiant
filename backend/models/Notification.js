@@ -14,6 +14,7 @@ const notificationSchema = new mongoose.Schema(
         'trajet_demarre',
         'trajet_termine',
         'trajet_annule',
+        'trajet_modifie',
         'suggestion',
         'nouveau_message',
         'nouvel_avis',

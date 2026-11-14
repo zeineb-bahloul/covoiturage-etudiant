@@ -7,7 +7,7 @@ const COULEURS = ['blanc', 'noir', 'gris', 'argent', 'rouge', 'bleu', 'vert', 'j
 
 router.put('/me', auth, async (req, res) => {
   try {
-    const { nom, filiere, adresse, preferences } = req.body;
+    const { nom, filiere, adresse, preferences, domicile, telephone } = req.body;
     const maj = {};
 
     if (nom !== undefined) {
@@ -18,6 +18,19 @@ router.put('/me', auth, async (req, res) => {
     }
     if (filiere !== undefined) maj.filiere = filiere;
     if (adresse !== undefined) maj.adresse = adresse;
+    if (telephone !== undefined) maj.telephone = String(telephone).trim();
+
+    // Adresse géolocalisée choisie avec la recherche d'adresse (sert au matching)
+    if (domicile === null) {
+      maj.domicile = null;
+    } else if (domicile !== undefined) {
+      const { label, lat, lng } = domicile;
+      if (typeof label !== 'string' || !label.trim() || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ message: 'Adresse invalide' });
+      }
+      maj.domicile = { label: label.trim(), location: { type: 'Point', coordinates: [lng, lat] } };
+      maj.adresse = label.trim();
+    }
 
     if (preferences) {
       if (typeof preferences.nonFumeur === 'boolean') maj['preferences.nonFumeur'] = preferences.nonFumeur;
@@ -30,7 +43,7 @@ router.put('/me', auth, async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.userId,
       { $set: maj },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).select('-motDePasse');
 
     res.json(user);
@@ -54,7 +67,7 @@ router.put('/me/vehicule', auth, async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.userId,
       { $set: { vehicule: { marque, couleur, places: nbPlaces, matricule } } },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).select('-motDePasse');
 
     res.json(user);
@@ -68,7 +81,7 @@ router.delete('/me/vehicule', auth, async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.userId,
       { $set: { vehicule: null } },
-      { new: true }
+      { returnDocument: 'after' }
     ).select('-motDePasse');
 
     res.json(user);
@@ -89,7 +102,7 @@ router.put('/me/photo', auth, async (req, res) => {
       return res.status(400).json({ message: 'Photo invalide ou trop lourde' });
     }
 
-    const user = await User.findByIdAndUpdate(req.userId, { $set: { photo } }, { new: true }).select('photo');
+    const user = await User.findByIdAndUpdate(req.userId, { $set: { photo } }, { returnDocument: 'after' }).select('photo');
     res.json({ photo: user.photo });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur' });

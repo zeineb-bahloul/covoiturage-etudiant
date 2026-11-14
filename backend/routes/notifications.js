@@ -29,6 +29,15 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Nombre de notifications non lues (badge de la cloche)
+router.get('/non-lues', auth, async (req, res) => {
+  try {
+    res.json({ nb: await Notification.countDocuments({ destinataire: req.userId, lu: false }) });
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 // Marquer une notification comme lue
 router.patch('/:id/read', auth, async (req, res) => {
   try {
@@ -39,7 +48,7 @@ router.patch('/:id/read', auth, async (req, res) => {
     const notif = await Notification.findOneAndUpdate(
       { _id: req.params.id, destinataire: req.userId },
       { $set: { lu: true } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!notif) {

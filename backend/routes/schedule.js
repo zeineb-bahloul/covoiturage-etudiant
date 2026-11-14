@@ -48,7 +48,7 @@ router.put('/me', auth, async (req, res) => {
     const schedule = await Schedule.findOneAndUpdate(
       { user: req.userId },
       { $set: { jours: propres } },
-      { new: true, upsert: true, runValidators: true }
+      { returnDocument: 'after', upsert: true, runValidators: true }
     );
 
     res.json(schedule);

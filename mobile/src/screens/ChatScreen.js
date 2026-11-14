@@ -1,539 +1,278 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api';
-import { colors, shadows, radius } from '../theme';
+import { Avatar, ErrorState, Header, IconButton, Ionicons, Loader, Row } from '../components/ui';
+import { useRealtime } from '../context/AuthContext';
+import { getSocket } from '../socket';
+import { colors, font, radius, spacing } from '../theme';
+import { court, erreurApi, heureMessage, quand } from '../utils';
 
+const RAPIDES = ['Je suis au point de rendez-vous', "J'arrive dans 5 minutes", 'On se retrouve où ?', 'Merci beaucoup !'];
+
+function jourSeparateur(date) {
+  const d = new Date(date);
+  const auj = new Date();
+  const hier = new Date();
+  hier.setDate(auj.getDate() - 1);
+  if (d.toDateString() === auj.toDateString()) return "Aujourd'hui";
+  if (d.toDateString() === hier.toDateString()) return 'Hier';
+  return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+/** Chat en temps réel conducteur ↔ passager (US12, Socket.io). */
 export default function ChatScreen({ route, navigation }) {
-  const {
-    conversationId: initialConvId,
-    destinataireId,
-    contactNom = 'Covoitureur',
-    contactPhoto,
-    contactFiliere = 'Étudiant ISET',
-    trajetTitre,
-  } = route.params || {};
+  const insets = useSafeAreaInsets();
+  const { conversationId: convInitiale, destinataireId, trajetId } = route.params || {};
+  const { rafraichirCompteurs } = useRealtime();
 
-  const [conversationId, setConversationId] = useState(initialConvId || null);
+  const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [texte, setTexte] = useState('');
-  const [envoiEnCours, setEnvoiEnCours] = useState(false);
-  const [chargement, setChargement] = useState(true);
   const [monId, setMonId] = useState(null);
+  const [texte, setTexte] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+  const [chargement, setChargement] = useState(true);
+  const [erreur, setErreur] = useState('');
+  const [ecrit, setEcrit] = useState(false);
+  const liste = useRef(null);
+  const minuteurEcrit = useRef(null);
+  const dernierTyping = useRef(0);
 
-  const flatListRef = useRef(null);
-
-  const suggestionsRapides = [
-    'Je suis au point de rendez-vous 👋',
-    'J’arrive dans 5 minutes 🚗',
-    'Tout est bon pour l’horaire ?',
-    'Merci beaucoup !',
-  ];
-
-  useEffect(() => {
-    let intervalId;
-
-    const initialiser = async () => {
-      try {
-        const resMe = await api.get('/auth/me');
-        setMonId(resMe.data?._id);
-
-        let convId = initialConvId;
-        if (!convId && destinataireId) {
-          const resConv = await api.post('/conversations', {
-            destinataireId,
-            titre: trajetTitre,
-          });
-          convId = resConv.data?._id;
-          setConversationId(convId);
-        }
-
-        if (convId) {
-          const resMsg = await api.get(`/conversations/${convId}/messages`);
-          setMessages(resMsg.data || []);
-        }
-      } catch (err) {
-        console.log('Erreur init chat :', err);
-      } finally {
-        setChargement(false);
-      }
-    };
-
-    initialiser();
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [initialConvId, destinataireId, trajetTitre]);
-
-  // Polling automatique
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await api.get(`/conversations/${conversationId}/messages`);
-        if (Array.isArray(res.data)) {
-          setMessages(res.data);
-        }
-      } catch (e) {
-        // Ignorer silencieusement les erreurs périodiques
-      }
-    }, 3500);
-
-    return () => clearInterval(interval);
-  }, [conversationId]);
-
-  const envoyerMessage = useCallback(async (texteAEnvoyer = null) => {
-    const contenu = (texteAEnvoyer || texte).trim();
-    if (!contenu) return;
-
-    setEnvoiEnCours(true);
+  const charger = useCallback(async () => {
     try {
-      let convId = conversationId;
-      if (!convId && destinataireId) {
-        const resConv = await api.post('/conversations', {
-          destinataireId,
-          titre: trajetTitre,
-        });
-        convId = resConv.data?._id;
-        setConversationId(convId);
+      const me = await api.get('/auth/me');
+      setMonId(me.data._id);
+      let conv;
+      if (convInitiale) {
+        conv = (await api.get(`/conversations/${convInitiale}`)).data;
+      } else {
+        conv = (await api.post('/conversations', { destinataireId, trajetId })).data;
       }
-
-      if (!convId) {
-        Alert.alert('Erreur', 'Impossible de démarrer la conversation');
-        return;
-      }
-
-      const res = await api.post(`/conversations/${convId}/messages`, { texte: contenu });
-      setMessages((prev) => [...prev, res.data]);
-      setTexte('');
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      setConversation(conv);
+      const msgs = await api.get(`/conversations/${conv._id}/messages`);
+      setMessages(msgs.data);
+      rafraichirCompteurs();
     } catch (err) {
-      Alert.alert('Erreur', 'Impossible d’envoyer le message.');
+      setErreur(erreurApi(err, 'Impossible d’ouvrir la discussion'));
     } finally {
-      setEnvoiEnCours(false);
+      setChargement(false);
     }
-  }, [conversationId, destinataireId, trajetTitre, texte]);
+  }, [convInitiale, destinataireId, trajetId, rafraichirCompteurs]);
 
-  const formaterHeure = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  useEffect(() => {
+    charger();
+  }, [charger]);
+
+  // Temps réel : rejoindre la salle de la conversation
+  useEffect(() => {
+    const socket = getSocket();
+    const id = conversation?._id;
+    if (!socket || !id) return undefined;
+
+    const rejoindre = () => socket.emit('conversation:join', id);
+    const surMessage = (m) => {
+      if (m.conversationId !== id) return;
+      setMessages((avant) => (avant.some((x) => x._id === m._id) ? avant : [...avant, m]));
+      setEcrit(false);
+    };
+    const surTyping = ({ conversationId }) => {
+      if (conversationId !== id) return;
+      setEcrit(true);
+      clearTimeout(minuteurEcrit.current);
+      minuteurEcrit.current = setTimeout(() => setEcrit(false), 3000);
+    };
+    const surLu = ({ conversationId, userId }) => {
+      if (conversationId !== id) return;
+      setMessages((avant) => avant.map((m) => (m.luPar?.includes(userId) ? m : { ...m, luPar: [...(m.luPar || []), userId] })));
+    };
+
+    rejoindre();
+    socket.on('connect', rejoindre);
+    socket.on('message:new', surMessage);
+    socket.on('conversation:typing', surTyping);
+    socket.on('conversation:read', surLu);
+    return () => {
+      socket.emit('conversation:leave', id);
+      socket.off('connect', rejoindre);
+      socket.off('message:new', surMessage);
+      socket.off('conversation:typing', surTyping);
+      socket.off('conversation:read', surLu);
+      clearTimeout(minuteurEcrit.current);
+    };
+  }, [conversation?._id]);
+
+  const envoyer = async (contenu = texte) => {
+    const t = contenu.trim();
+    if (!t || !conversation || envoi) return;
+    setEnvoi(true);
+    try {
+      const { data } = await api.post(`/conversations/${conversation._id}/messages`, { texte: t });
+      setMessages((avant) => (avant.some((x) => x._id === data._id) ? avant : [...avant, data]));
+      setTexte('');
+    } catch (err) {
+      setErreur(erreurApi(err, 'Message non envoyé'));
+      setTimeout(() => setErreur(''), 3000);
+    } finally {
+      setEnvoi(false);
+    }
   };
 
-  const renderMessage = useCallback(({ item }) => {
-    const estMoi =
-      monId &&
-      (item.expediteur?._id?.toString() === monId.toString() ||
-        item.expediteur?.toString() === monId.toString());
+  const surSaisie = (v) => {
+    setTexte(v);
+    const now = Date.now();
+    if (conversation && now - dernierTyping.current > 2000) {
+      dernierTyping.current = now;
+      getSocket()?.emit('conversation:typing', conversation._id);
+    }
+  };
 
-    return (
-      <View style={[s.messageWrapper, estMoi ? s.messageWrapperRight : s.messageWrapperLeft]}>
-        <View style={[s.bubble, estMoi ? s.bubbleMe : s.bubbleOther]}>
-          <Text style={[s.bubbleText, estMoi ? s.bubbleTextMe : s.bubbleTextOther]}>
-            {item.texte}
-          </Text>
-          <View style={s.bubbleMetaRow}>
-            <Text style={[s.bubbleTime, estMoi ? s.bubbleTimeMe : s.bubbleTimeOther]}>
-              {formaterHeure(item.date)}
-            </Text>
-            {estMoi && <Text style={s.checkMark}>✓✓</Text>}
-          </View>
-        </View>
-      </View>
-    );
-  }, [monId]);
+  if (chargement) return <Loader />;
+  if (!conversation) return <ErrorState text={erreur} onRetry={() => navigation.goBack()} />;
+
+  const autre = conversation.autreParticipant || {};
+  const trajet = conversation.trajet;
+  const autreId = autre._id;
+
+  // Séparateurs de date
+  const lignes = [];
+  let jourPrec = '';
+  for (const m of messages) {
+    const j = jourSeparateur(m.createdAt);
+    if (j !== jourPrec) {
+      lignes.push({ type: 'jour', id: `j-${m._id}`, label: j });
+      jourPrec = j;
+    }
+    lignes.push({ type: 'msg', id: m._id, m });
+  }
 
   return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-    >
-      {/* ─── Header Bleu Royal UniRide (Page 11 PDF) ─── */}
-      <View style={s.header}>
-        <View style={s.headerContent}>
-          <TouchableOpacity
-            style={s.backBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
-
-          <View style={s.headerAvatarContainer}>
-            {contactPhoto ? (
-              <Image source={{ uri: contactPhoto }} style={s.headerAvatar} />
-            ) : (
-              <View style={s.headerAvatarPlaceholder}>
-                <Text style={s.headerAvatarText}>
-                  {contactNom ? contactNom[0].toUpperCase() : 'U'}
-                </Text>
-              </View>
-            )}
-            <View style={s.onlineBadge} />
-          </View>
-
-          <View style={s.headerTextContainer}>
-            <Text style={s.headerName} numberOfLines={1}>
-              {contactNom}
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <Header
+        title={autre.nom || 'Discussion'}
+        subtitle={ecrit ? 'est en train d’écrire…' : autre.filiere || 'Étudiant ISET Nabeul'}
+        onBack={() => navigation.goBack()}
+        right={
+          autreId ? (
+            <IconButton
+              icon="flag-outline"
+              label="Signaler"
+              onPress={() => navigation.navigate('Report', { utilisateurSignaleId: autreId, utilisateurNom: autre.nom, trajetId: trajet?._id })}
+            />
+          ) : null
+        }
+      >
+        {trajet ? (
+          <Pressable onPress={() => navigation.navigate('RideDetail', { id: trajet._id })} style={styles.trajet}>
+            <Ionicons name="car-outline" size={16} color={colors.primary} />
+            <Text style={styles.trajetTexte} numberOfLines={1}>
+              {court(trajet.depart?.label)} → {court(trajet.destination?.label)} · {trajet.heureDepart} · {quand(trajet)}
             </Text>
-            <Text style={s.headerStatus} numberOfLines={1}>
-              🟢 En ligne • {contactFiliere}
-            </Text>
-          </View>
-        </View>
-
-        {/* ─── Trajet Context Banner (Page 11 PDF) ─── */}
-        {trajetTitre ? (
-          <View style={s.tripBanner}>
-            <Text style={s.tripBannerText} numberOfLines={1}>
-              🚗 {trajetTitre}
-            </Text>
-            <View style={s.confirmedBadge}>
-              <Text style={s.confirmedBadgeText}>Confirmé</Text>
-            </View>
-          </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          </Pressable>
         ) : null}
-      </View>
+      </Header>
 
-      {/* ─── Liste des Messages ─── */}
-      {chargement ? (
-        <View style={s.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item, index) => item._id || String(index)}
-          renderItem={renderMessage}
-          contentContainerStyle={s.messagesList}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          ListEmptyComponent={
-            <View style={s.emptyChat}>
-              <Text style={s.emptyChatIcon}>👋</Text>
-              <Text style={s.emptyChatTitle}>Démarrez la conversation</Text>
-              <Text style={s.emptyChatSub}>
-                Organisez votre point de rendez-vous et vos horaires de trajet en toute simplicité.
-              </Text>
-            </View>
+      <FlatList
+        ref={liste}
+        data={lignes}
+        keyExtractor={(l) => l.id}
+        contentContainerStyle={{ padding: spacing.lg, flexGrow: 1 }}
+        onContentSizeChange={() => liste.current?.scrollToEnd({ animated: false })}
+        ListEmptyComponent={
+          <View style={styles.vide}>
+            <Avatar uri={autre.photo} nom={autre.nom} size={64} />
+            <Text style={[font.h3, { marginTop: spacing.md }]}>{autre.nom}</Text>
+            <Text style={[font.small, { textAlign: 'center', marginTop: 4 }]}>Fixez ensemble le point et l'heure de rendez-vous.</Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          if (item.type === 'jour') {
+            return <Text style={styles.jour}>{item.label}</Text>;
           }
-        />
-      )}
+          const m = item.m;
+          const estMoi = (m.expediteur?._id || m.expediteur) === monId;
+          const lu = estMoi && autreId && (m.luPar || []).includes(autreId);
+          return (
+            <View style={[styles.bulleLigne, estMoi ? { justifyContent: 'flex-end' } : null]}>
+              <View style={[styles.bulle, estMoi ? styles.bulleMoi : styles.bulleAutre]}>
+                <Text style={{ color: estMoi ? colors.white : colors.ink, fontSize: 15, lineHeight: 20 }}>{m.texte}</Text>
+                <Row gap={4} style={{ alignSelf: 'flex-end', marginTop: 3 }}>
+                  <Text style={{ fontSize: 11, color: estMoi ? 'rgba(255,255,255,0.75)' : colors.faint }}>{heureMessage(m.createdAt)}</Text>
+                  {estMoi ? <Ionicons name={lu ? 'checkmark-done' : 'checkmark'} size={14} color={lu ? colors.accent : 'rgba(255,255,255,0.75)'} /> : null}
+                </Row>
+              </View>
+            </View>
+          );
+        }}
+      />
 
-      {/* ─── Suggestions Rapides ─── */}
-      <View style={s.quickRepliesRow}>
+      {erreur ? <Text style={styles.erreur}>{erreur}</Text> : null}
+
+      {messages.length < 4 ? (
         <FlatList
           horizontal
+          data={RAPIDES}
+          keyExtractor={(r) => r}
           showsHorizontalScrollIndicator={false}
-          data={suggestionsRapides}
-          keyExtractor={(item) => item}
-          contentContainerStyle={{ paddingHorizontal: 14, gap: 8 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: 8, paddingBottom: 8 }}
+          style={{ flexGrow: 0 }}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              style={s.quickReplyChip}
-              onPress={() => envoyerMessage(item)}
-              activeOpacity={0.8}
-            >
-              <Text style={s.quickReplyText}>{item}</Text>
-            </TouchableOpacity>
+            <Pressable style={styles.rapide} onPress={() => envoyer(item)}>
+              <Text style={styles.rapideTexte}>{item}</Text>
+            </Pressable>
           )}
         />
-      </View>
+      ) : null}
 
-      {/* ─── Barre de Saisie ─── */}
-      <View style={s.inputBar}>
+      <View style={[styles.saisie, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <TextInput
-          style={s.textInput}
-          placeholder="Écrivez un message..."
-          placeholderTextColor="#94A3B8"
+          style={styles.input}
           value={texte}
-          onChangeText={setTexte}
+          onChangeText={surSaisie}
+          placeholder="Votre message…"
+          placeholderTextColor={colors.faint}
           multiline
+          maxLength={1000}
         />
-
-        <TouchableOpacity
-          style={[s.sendBtn, (!texte.trim() || envoiEnCours) && s.sendBtnDisabled]}
-          onPress={() => envoyerMessage()}
-          disabled={!texte.trim() || envoiEnCours}
-          activeOpacity={0.85}
-        >
-          {envoiEnCours ? (
-            <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-            <Text style={s.sendArrow}>➤</Text>
-          )}
-        </TouchableOpacity>
+        <Pressable onPress={() => envoyer()} disabled={!texte.trim() || envoi} style={[styles.envoyer, (!texte.trim() || envoi) && { opacity: 0.4 }]}>
+          {envoi ? <ActivityIndicator color={colors.white} size="small" /> : <Ionicons name="send" size={18} color={colors.white} />}
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    backgroundColor: colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 52 : 36,
-    paddingBottom: 14,
-    paddingHorizontal: 16,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    ...shadows.card,
-  },
-  headerContent: {
+const styles = StyleSheet.create({
+  trajet: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  backArrow: {
-    color: '#FFF',
-    fontSize: 26,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-  headerAvatarContainer: {
-    position: 'relative',
-    marginRight: 10,
-  },
-  headerAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2,
-    borderColor: colors.accent,
-  },
-  headerAvatarPlaceholder: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerAvatarText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  onlineBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#22C55E',
-    borderWidth: 1.5,
-    borderColor: '#FFF',
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  headerStatus: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: 1,
-  },
-  tripBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    marginTop: 12,
-  },
-  tripBannerText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '700',
-    flex: 1,
-  },
-  confirmedBadge: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  confirmedBadgeText: {
-    color: colors.navy,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  messagesList: {
-    padding: 16,
-    paddingBottom: 10,
-  },
-  messageWrapper: {
-    marginVertical: 4,
-    maxWidth: '80%',
-  },
-  messageWrapperRight: {
-    alignSelf: 'flex-end',
-  },
-  messageWrapperLeft: {
-    alignSelf: 'flex-start',
-  },
-  bubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    ...shadows.card,
-  },
-  bubbleMe: {
-    backgroundColor: colors.primary,
-    borderBottomRightRadius: 4,
-  },
-  bubbleOther: {
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  bubbleText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  bubbleTextMe: {
-    color: '#FFFFFF',
-  },
-  bubbleTextOther: {
-    color: '#0F172A',
-  },
-  bubbleMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 4,
-  },
-  bubbleTime: {
-    fontSize: 10,
-  },
-  bubbleTimeMe: {
-    color: 'rgba(255,255,255,0.7)',
-  },
-  bubbleTimeOther: {
-    color: '#94A3B8',
-  },
-  checkMark: {
-    color: colors.accent,
-    fontSize: 10,
-    marginLeft: 4,
-    fontWeight: '700',
-  },
-  emptyChat: {
-    alignItems: 'center',
-    paddingTop: 80,
-    paddingHorizontal: 30,
-  },
-  emptyChatIcon: {
-    fontSize: 44,
-    marginBottom: 10,
-  },
-  emptyChatTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  emptyChatSub: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  quickRepliesRow: {
+    gap: 8,
+    marginTop: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.md,
     paddingVertical: 8,
-    backgroundColor: '#F8FAFC',
+    borderRadius: radius.md,
   },
-  quickReplyChip: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  quickReplyText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  inputBar: {
+  trajetTexte: { flex: 1, color: colors.primary, fontWeight: '600', fontSize: 13 },
+  vide: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl },
+  jour: { alignSelf: 'center', fontSize: 12, color: colors.muted, backgroundColor: colors.input, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full, marginVertical: spacing.md, overflow: 'hidden' },
+  bulleLigne: { flexDirection: 'row', marginBottom: 6 },
+  bulle: { maxWidth: '80%', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18 },
+  bulleMoi: { backgroundColor: colors.primary, borderBottomRightRadius: 5 },
+  bulleAutre: { backgroundColor: colors.card, borderBottomLeftRadius: 5, borderWidth: 1, borderColor: colors.borderSoft },
+  erreur: { color: colors.danger, textAlign: 'center', fontSize: 13, paddingBottom: 6 },
+  rapide: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 7 },
+  rapideTexte: { color: colors.primary, fontWeight: '600', fontSize: 13 },
+  saisie: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.card,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+    borderTopColor: colors.borderSoft,
   },
-  textInput: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
-    maxHeight: 100,
-  },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-    ...shadows.card,
-  },
-  sendBtnDisabled: {
-    backgroundColor: '#94A3B8',
-  },
-  sendArrow: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    marginLeft: 2,
-  },
+  input: { flex: 1, backgroundColor: colors.input, borderRadius: 22, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, fontSize: 15, maxHeight: 110, color: colors.ink },
+  envoyer: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });
