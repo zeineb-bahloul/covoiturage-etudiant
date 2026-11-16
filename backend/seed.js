@@ -20,6 +20,7 @@ const Conversation = require('./models/Conversation');
 const Message = require('./models/Message');
 const Notification = require('./models/Notification');
 const Report = require('./models/Report');
+const Sos = require('./models/Sos');
 const { distanceKm } = require('./services/matching');
 const { calculerStatistiques, mettreAJourBadges } = require('./services/badges');
 
@@ -44,6 +45,7 @@ const COMPTES = [
   { cle: 'youssef', nom: 'Youssef Ben Ali', filiere: 'Génie Mécanique', domicile: 'korba', prefs: { nonFumeur: false, mixte: true, musique: 'animee' }, vehicule: { marque: 'Renault Clio', couleur: 'blanc', places: 4, matricule: '201 TU 1188' } },
   { cle: 'amira', nom: 'Amira Trabelsi', filiere: 'Technologies de l’Informatique', domicile: 'nabeul', prefs: { nonFumeur: true, mixte: true, musique: 'aucune' } },
   { cle: 'omar', nom: 'Omar Gharbi', filiere: 'Génie des Procédés', domicile: 'mrezga', prefs: { nonFumeur: true, mixte: true, musique: 'aucune' } },
+  { cle: 'bilel', nom: 'Bilel Hamdi', filiere: 'Génie Électrique', domicile: 'nabeul', prefs: { nonFumeur: false, mixte: true, musique: 'animee' }, bloque: 'Comportements irrespectueux signalés à plusieurs reprises' },
   { cle: 'admin', nom: 'Administration UniRide', filiere: '', role: 'admin' },
 ];
 const email = (cle) => `${cle}@isetn.tn`;
@@ -103,6 +105,7 @@ async function supprimerAnciennesDonnees() {
     Conversation.deleteMany({ _id: { $in: convs.map((c) => c._id) } }),
     Notification.deleteMany({ $or: [{ destinataire: { $in: ids } }, { emetteur: { $in: ids } }] }),
     Report.deleteMany({ $or: [{ auteur: { $in: ids } }, { utilisateurSignale: { $in: ids } }] }),
+    Sos.deleteMany({ auteur: { $in: ids } }),
     Schedule.deleteMany({ user: { $in: ids } }),
     Ride.deleteMany({ _id: { $in: rideIds } }),
   ]);
@@ -127,7 +130,13 @@ async function seed() {
       adresse: c.domicile ? LIEUX[c.domicile].label : '',
       preferences: c.prefs || undefined,
       vehicule: c.vehicule || null,
+      contactConfiance: c.role ? undefined : { nom: 'Maman', telephone: '+21698000000' },
+      bloque: !!c.bloque,
+      bloqueRaison: c.bloque || '',
+      bloqueLe: c.bloque ? jour(-2) : null,
+      derniereActivite: minutesAvant(Math.floor(Math.random() * 60 * 24 * 3)),
     });
+    await User.updateOne({ _id: u[c.cle]._id }, { createdAt: jour(-Math.floor(Math.random() * 6), 10) }, { timestamps: false });
   }
 
   // ─── Sprint 2 : emplois du temps ───
@@ -244,6 +253,13 @@ async function seed() {
 
   // ─── Sprint 5 : signalement (sera traité par l'admin au sprint 6) ───
   await Report.create({ auteur: u.sara._id, utilisateurSignale: u.youssef._id, trajet: T.youssefPasse._id, motif: 'comportement_inapproprie', commentaire: 'Le conducteur a fumé pendant tout le trajet malgré ma demande.' });
+  await Report.create({ auteur: u.omar._id, utilisateurSignale: u.youssef._id, trajet: T.youssefPasse._id, motif: 'conduite_dangereuse', commentaire: 'Vitesse excessive sur la route de Korba.' });
+  await Report.create({ auteur: u.amira._id, utilisateurSignale: u.bilel._id, motif: 'comportement_inapproprie', commentaire: 'Messages insistants et irrespectueux dans le chat.', statut: 'traite', decisionAdmin: 'Compte bloqué après plusieurs signalements.' });
+
+  // ─── Sprint 6 : alerte SOS en cours (trajet de Linda) ───
+  await Sos.create({ auteur: u.amira._id, trajet: T.lindaEnCours._id, position: { type: 'Point', coordinates: [10.668, 36.43] }, precisionM: 12, contactPrevenu: { nom: 'Maman', telephone: '+21698000000' } });
+  const admin = await User.findOne({ email: email('admin') });
+  await notif(admin, u.amira, 'sos', '🚨 Alerte SOS de Amira Trabelsi', 'Position : https://maps.google.com/?q=36.43,10.668', { trajetId: T.lindaEnCours._id }, 2);
 
   // ─── Notes moyennes, statistiques et badges calculés comme dans l'application ───
   for (const c of COMPTES) {
@@ -270,7 +286,8 @@ if (require.main === module) {
       console.log('  amira@isetn.tn    passagère  (suit le trajet en cours de Linda)');
       console.log('  youssef@isetn.tn  conducteur fumeur (avis moyens, signalé)');
       console.log('  omar@isetn.tn     passager   (demande refusée, trajet annulé)');
-      console.log('  admin@isetn.tn    administrateur (pour le sprint 6)\n');
+      console.log('  bilel@isetn.tn    compte BLOQUÉ (connexion refusée)');
+      console.log('  admin@isetn.tn    administrateur (tableau de bord, utilisateurs, signalements, SOS)\n');
       return mongoose.disconnect();
     })
     .catch((err) => {

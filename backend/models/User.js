@@ -50,6 +50,16 @@ const userSchema = new mongoose.Schema(
       musique: { type: String, enum: ['calme', 'animee', 'aucune'], default: 'aucune' },
     },
     vehicule: { type: vehiculeSchema, default: null },
+    // Bouton SOS : personne prévenue par SMS avec la position (US22)
+    contactConfiance: {
+      nom: { type: String, default: '', trim: true },
+      telephone: { type: String, default: '', trim: true },
+    },
+    // Administration (US18)
+    bloque: { type: Boolean, default: false },
+    bloqueRaison: { type: String, default: '' },
+    bloqueLe: { type: Date, default: null },
+    derniereActivite: { type: Date, default: Date.now },
     // Mot de passe oublié : code à 6 chiffres (haché) valable 15 minutes
     resetCode: { type: String, default: null, select: false },
     resetExpire: { type: Date, default: null, select: false },

@@ -12,11 +12,11 @@ export const ONGLETS = [
   { cle: 'profil', label: 'Profil', icone: 'person' },
 ];
 
-export default function TabBar({ actif, onChange, badges = {} }) {
+export default function TabBar({ actif, onChange, badges = {}, onglets = ONGLETS }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {ONGLETS.map((o) => {
+      {onglets.map((o) => {
         const sel = o.cle === actif;
         const badge = badges[o.cle];
         return (

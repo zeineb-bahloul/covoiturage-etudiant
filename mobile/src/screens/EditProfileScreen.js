@@ -23,6 +23,8 @@ export default function EditProfileScreen({ navigation }) {
   const [nonFumeur, setNonFumeur] = useState(true);
   const [mixte, setMixte] = useState(true);
   const [musique, setMusique] = useState('aucune');
+  const [contactNom, setContactNom] = useState('');
+  const [contactTel, setContactTel] = useState('');
 
   useEffect(() => {
     api
@@ -38,6 +40,8 @@ export default function EditProfileScreen({ navigation }) {
         setNonFumeur(data.preferences?.nonFumeur ?? true);
         setMixte(data.preferences?.mixte ?? true);
         setMusique(data.preferences?.musique || 'aucune');
+        setContactNom(data.contactConfiance?.nom || '');
+        setContactTel(data.contactConfiance?.telephone || '');
       })
       .catch((err) => Alert.alert('Erreur', erreurApi(err)))
       .finally(() => setChargement(false));
@@ -56,6 +60,7 @@ export default function EditProfileScreen({ navigation }) {
         telephone,
         domicile: domicile ? { label: domicile.label, lat: domicile.lat, lng: domicile.lng } : null,
         preferences: { nonFumeur, mixte, musique },
+        contactConfiance: { nom: contactNom, telephone: contactTel },
       });
       navigation.goBack();
     } catch (err) {
@@ -97,6 +102,21 @@ export default function EditProfileScreen({ navigation }) {
         <View style={{ marginTop: -8 }}>
           <Field hint="Seule une adresse approximative est nécessaire : elle sert à calculer la proximité avec les conducteurs (35 % du score)." style={{ marginBottom: 0 }} />
         </View>
+      </Card>
+
+      <SectionTitle>Contact de confiance (SOS)</SectionTitle>
+      <Card>
+        <Input label="Nom" icon="heart-outline" placeholder="Ex : Maman" value={contactNom} onChangeText={setContactNom} />
+        <Input
+          label="Téléphone"
+          icon="call-outline"
+          placeholder="Ex : 98 123 456"
+          value={contactTel}
+          onChangeText={setContactTel}
+          keyboardType="phone-pad"
+          hint="En cas d'alerte SOS pendant un trajet, cette personne reçoit votre position par SMS."
+          style={{ marginBottom: 0 }}
+        />
       </Card>
 
       <SectionTitle>Mes préférences de trajet</SectionTitle>

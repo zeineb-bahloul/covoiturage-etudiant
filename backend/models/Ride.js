@@ -33,6 +33,8 @@ const rideSchema = new mongoose.Schema(
     },
     startedAt: { type: Date },
     finishedAt: { type: Date },
+    // Dates (AAAA-MM-JJ) où le rappel « départ dans 30 min » a déjà été envoyé
+    rappels: { type: [String], default: [] },
   },
   { timestamps: true }
 );

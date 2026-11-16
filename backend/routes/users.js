@@ -7,7 +7,7 @@ const COULEURS = ['blanc', 'noir', 'gris', 'argent', 'rouge', 'bleu', 'vert', 'j
 
 router.put('/me', auth, async (req, res) => {
   try {
-    const { nom, filiere, adresse, preferences, domicile, telephone } = req.body;
+    const { nom, filiere, adresse, preferences, domicile, telephone, contactConfiance } = req.body;
     const maj = {};
 
     if (nom !== undefined) {
@@ -19,6 +19,14 @@ router.put('/me', auth, async (req, res) => {
     if (filiere !== undefined) maj.filiere = filiere;
     if (adresse !== undefined) maj.adresse = adresse;
     if (telephone !== undefined) maj.telephone = String(telephone).trim();
+    if (contactConfiance !== undefined) {
+      const nomC = String(contactConfiance?.nom || '').trim();
+      const tel = String(contactConfiance?.telephone || '').replace(/[^\d+]/g, '');
+      if (tel && (tel.replace('+', '').length < 8 || tel.length > 15)) {
+        return res.status(400).json({ message: 'Numéro du contact de confiance invalide' });
+      }
+      maj.contactConfiance = { nom: nomC.slice(0, 60), telephone: tel };
+    }
 
     // Adresse géolocalisée choisie avec la recherche d'adresse (sert au matching)
     if (domicile === null) {

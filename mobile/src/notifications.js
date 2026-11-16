@@ -21,6 +21,10 @@ export function iconeNotification(type) {
     nouveau_message: ['chatbubble-ellipses', colors.primarySoft, colors.primary],
     nouvel_avis: ['star', colors.accentSoft, colors.accentInk],
     badge_obtenu: ['trophy', colors.accentSoft, colors.accentInk],
+    rappel_trajet: ['alarm', colors.infoSoft, colors.info],
+    sos: ['alert-circle', colors.dangerSoft, colors.danger],
+    compte_bloque: ['lock-closed', colors.dangerSoft, colors.danger],
+    signalement_traite: ['shield-checkmark', colors.successSoft, colors.success],
   }[type] || ['notifications', colors.primarySoft, colors.primary];
   return { name: t[0], bg: t[1], fg: t[2] };
 }
@@ -46,6 +50,10 @@ export function ouvrirNotification(navigation, notif) {
       return trajetId ? navigation.navigate('ActiveRide', { id: trajetId }) : null;
     case 'trajet_termine':
       return navigation.navigate('RateRide');
+    case 'sos':
+      return allerOnglet(navigation, 'tableau');
+    case 'signalement_traite':
+      return null;
     case 'nouvel_avis':
     case 'badge_obtenu':
       return navigation.navigate('Stats');

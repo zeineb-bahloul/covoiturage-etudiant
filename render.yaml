@@ -1,0 +1,24 @@
+# Déploiement du backend UniRide sur Render (offre gratuite) — voir DEPLOIEMENT.md
+services:
+  - type: web
+    name: uniride-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: Africa/Tunis
+      - key: MODE_DEMO
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGO_URI
+        sync: false
+      - key: ORS_API_KEY
+        sync: false

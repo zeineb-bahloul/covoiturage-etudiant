@@ -1,10 +1,13 @@
 require('dotenv').config();
 require('./config/dns');
+// Heures des trajets et rappels à l'heure tunisienne, même sur un serveur à l'étranger (Render)
+process.env.TZ = process.env.TZ || 'Africa/Tunis';
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const { initSocket } = require('./services/socket');
+const { demarrerRappels } = require('./services/rappels');
 
 const app = express();
 
@@ -22,9 +25,16 @@ app.use('/api/conversations', require('./routes/conversations'));
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/stats', require('./routes/stats'));
+app.use('/api/sos', require('./routes/sos'));
+app.use('/api/admin', require('./routes/admin'));
 
 app.get('/', (req, res) => {
   res.json({ message: 'API OK - UniRide Backend' });
+});
+
+// Vérification de santé (Render, supervision)
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, base: mongoose.connection.readyState === 1 ? 'connectée' : 'déconnectée', heure: new Date().toISOString() });
 });
 
 // Route inconnue
@@ -50,7 +60,10 @@ const PORT = process.env.PORT || 5000;
 if (require.main === module) {
   mongoose
     .connect(process.env.MONGO_URI)
-    .then(() => console.log('MongoDB connecté'))
+    .then(() => {
+      console.log('MongoDB connecté');
+      demarrerRappels();
+    })
     .catch((err) => console.error('Erreur MongoDB :', err.message));
 
   server.listen(PORT, '0.0.0.0', () => {

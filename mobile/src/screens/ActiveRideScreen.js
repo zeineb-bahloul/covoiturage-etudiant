@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api';
 import RouteMap from '../components/RouteMap';
@@ -91,6 +91,14 @@ export default function ActiveRideScreen({ route, navigation }) {
           title={termine ? 'Trajet terminé' : estConducteur ? 'Trajet en cours' : 'Votre conducteur est en route'}
           subtitle={`${court(ride.depart.label)} → ${court(ride.destination.label)}`}
           onBack={() => navigation.goBack()}
+          right={
+            ride.statut === 'en_cours' ? (
+              <Pressable onPress={() => navigation.navigate('Sos', { trajetId: ride._id })} style={styles.sos} accessibilityLabel="SOS">
+                <Ionicons name="alert-circle" size={18} color={colors.white} />
+                <Text style={styles.sosTexte}>SOS</Text>
+              </Pressable>
+            ) : null
+          }
         />
       }
       footer={
@@ -212,6 +220,8 @@ function Ligne({ label, valeur }) {
 }
 
 const styles = StyleSheet.create({
+  sos: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.danger, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+  sosTexte: { color: colors.white, fontWeight: '900', letterSpacing: 1 },
   overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: spacing.xl },
   modal: { backgroundColor: colors.card, borderRadius: 24, padding: spacing.xl, alignItems: 'center' },
   check: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },

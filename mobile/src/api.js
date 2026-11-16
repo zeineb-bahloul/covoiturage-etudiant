@@ -1,8 +1,9 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ⚠️ Mettez ici l'adresse IP de l'ordinateur qui fait tourner le backend (ipconfig sous Windows).
-export const SERVER_URL = 'http://192.168.1.43:5000';
+// En local : l'adresse IP de l'ordinateur qui fait tourner le backend (ipconfig sous Windows).
+// Après déploiement (Render) : définir EXPO_PUBLIC_API_URL=https://uniride-api.onrender.com dans mobile/.env
+export const SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.43:5000';
 export const API_URL = `${SERVER_URL}/api`;
 
 let cachedToken = null;
@@ -41,8 +42,10 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     const url = err.config?.url || '';
-    if (err.response?.status === 401 && cachedToken && !url.startsWith('/auth/')) {
-      surDeconnexion?.();
+    const status = err.response?.status;
+    if (cachedToken && !url.startsWith('/auth/login') && (status === 401 || (status === 403 && err.response?.data?.bloque))) {
+      // Jeton expiré, compte supprimé ou bloqué par l'administration
+      surDeconnexion?.(status === 403 ? err.response.data.message : null);
     }
     return Promise.reject(err);
   }

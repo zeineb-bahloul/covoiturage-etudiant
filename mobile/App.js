@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { clearApiToken, loadApiToken, setApiToken, surJetonExpire } from './src/api';
-import { connecterSocket, deconnecterSocket } from './src/socket';
+import api, { clearApiToken, loadApiToken, setApiToken, surJetonExpire } from './src/api';
+import { connecterSocket, deconnecterSocket, getSocket } from './src/socket';
 import { AuthContext, RealtimeProvider } from './src/context/AuthContext';
 import { Loader } from './src/components/ui';
 import NotificationBanner from './src/components/NotificationBanner';
@@ -33,35 +34,62 @@ import ChatScreen from './src/screens/ChatScreen';
 import RateRideScreen from './src/screens/RateRideScreen';
 import ReportScreen from './src/screens/ReportScreen';
 import StatsScreen from './src/screens/StatsScreen';
+import SosScreen from './src/screens/SosScreen';
+import AdminMainScreen from './src/screens/admin/AdminMainScreen';
+import AdminUserDetailScreen from './src/screens/admin/AdminUserDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 export default function App() {
   const [token, setToken] = useState(null);
+  const [role, setRole] = useState(null);
   const [chargement, setChargement] = useState(true);
 
-  const deconnecter = useCallback(async () => {
+  const deconnecter = useCallback(async (message) => {
     deconnecterSocket();
     await clearApiToken();
     setToken(null);
+    setRole(null);
+    if (typeof message === 'string' && message) Alert.alert('Compte suspendu', message);
   }, []);
 
+  /** Ouvre la session : le rôle décide de l'espace affiché (étudiant ou administration). */
   const connecter = useCallback(async (nouveauToken) => {
     await setApiToken(nouveauToken);
+    const { data } = await api.get('/auth/me');
     connecterSocket(nouveauToken);
+    setRole(data.role);
     setToken(nouveauToken);
   }, []);
 
   useEffect(() => {
     surJetonExpire(deconnecter);
     loadApiToken()
-      .then((t) => {
-        if (t) connecterSocket(t);
-        setToken(t);
+      .then(async (t) => {
+        if (!t) return;
+        try {
+          await connecter(t);
+        } catch (err) {
+          // Hors ligne : on garde la session, l'écran affichera l'erreur réseau
+          if (!err.response) {
+            connecterSocket(t);
+            setToken(t);
+            setRole('utilisateur');
+          }
+        }
       })
       .finally(() => setChargement(false));
-  }, [deconnecter]);
+  }, [deconnecter, connecter]);
+
+  // Compte bloqué ou supprimé par l'administration pendant l'utilisation
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const surBlocage = ({ raison }) => deconnecter(`Votre compte a été bloqué par l'administration : ${raison}`);
+    socket.on('compte:bloque', surBlocage);
+    return () => socket.off('compte:bloque', surBlocage);
+  }, [token, deconnecter]);
 
   if (chargement) {
     return (
@@ -80,7 +108,13 @@ export default function App() {
             <Stack.Navigator
               screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: colors.background } }}
             >
-              {token ? (
+              {token && role === 'admin' ? (
+                <>
+                  <Stack.Screen name="Main" component={AdminMainScreen} />
+                  <Stack.Screen name="AdminUserDetail" component={AdminUserDetailScreen} />
+                  <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                </>
+              ) : token ? (
                 <>
                   <Stack.Screen name="Main" component={MainScreen} />
                   <Stack.Screen name="EditProfile" component={EditProfileScreen} />
@@ -100,6 +134,7 @@ export default function App() {
                   <Stack.Screen name="RateRide" component={RateRideScreen} />
                   <Stack.Screen name="Report" component={ReportScreen} options={{ presentation: 'modal' }} />
                   <Stack.Screen name="Stats" component={StatsScreen} />
+                  <Stack.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
                 </>
               ) : (
                 <>

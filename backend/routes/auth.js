@@ -15,7 +15,7 @@ const DOMAINES = (process.env.EMAIL_DOMAINES || '')
   .filter(Boolean);
 
 const creerJeton = (user) => jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-const resume = (user) => ({ id: user._id, nom: user.nom, email: user.email });
+const resume = (user) => ({ id: user._id, nom: user.nom, email: user.email, role: user.role });
 
 router.post('/register', async (req, res) => {
   try {
@@ -56,6 +56,14 @@ router.post('/login', async (req, res) => {
     if (!user || !(await bcrypt.compare(motDePasse || '', user.motDePasse))) {
       return res.status(400).json({ message: 'E-mail ou mot de passe incorrect' });
     }
+    if (user.bloque) {
+      return res.status(403).json({
+        message: `Votre compte a été bloqué par l'administration${user.bloqueRaison ? ` : ${user.bloqueRaison}` : ''}.`,
+        bloque: true,
+      });
+    }
+    user.derniereActivite = new Date();
+    await user.save();
     res.json({ token: creerJeton(user), user: resume(user) });
   } catch (err) {
     console.error(err);
@@ -81,7 +89,7 @@ router.post('/forgot', async (req, res) => {
       await user.save();
       // Pas de service d'e-mail gratuit configuré : le code s'affiche dans la console du serveur.
       console.log(`[Mot de passe oublié] Code pour ${mail} : ${code} (valable 15 min)`);
-      if (process.env.NODE_ENV !== 'production') reponse.codeDemo = code;
+      if (process.env.NODE_ENV !== 'production' || process.env.MODE_DEMO === 'true') reponse.codeDemo = code;
     }
     res.json(reponse);
   } catch (err) {
